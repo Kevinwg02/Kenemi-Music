@@ -184,20 +184,40 @@ class MusicService : Service() {
     }
 
     fun playNext() {
-        if (hasNext) {
-            playSong(playlist[currentIndex + 1])
-        } else if (repeatMode == RepeatMode.ALL && playlist.isNotEmpty()) {
+        if (playlist.isEmpty()) return
+
+        if (isShuffleEnabled) {
+            val randomIndex = playlist.indices.random()
+            playSong(playlist[randomIndex])
+            return
+        }
+
+        val nextIndex = currentIndex + 1
+        if (nextIndex < playlist.size) {
+            playSong(playlist[nextIndex])
+        } else if (repeatMode == RepeatMode.ALL) {
             playSong(playlist[0])
         }
     }
 
+
     fun playPrevious() {
-        if (hasPrevious) {
-            playSong(playlist[currentIndex - 1])
-        } else if (repeatMode == RepeatMode.ALL && playlist.isNotEmpty()) {
-            playSong(playlist[playlist.size - 1])
+        if (playlist.isEmpty()) return
+
+        if (isShuffleEnabled) {
+            val randomIndex = playlist.indices.random()
+            playSong(playlist[randomIndex])
+            return
+        }
+
+        val previousIndex = currentIndex - 1
+        if (previousIndex >= 0) {
+            playSong(playlist[previousIndex])
+        } else if (repeatMode == RepeatMode.ALL) {
+            playSong(playlist.last())
         }
     }
+
 
     fun seekTo(position: Long) {
         mediaPlayer?.seekTo(position.toInt())
@@ -227,6 +247,14 @@ class MusicService : Service() {
             }
         }
     }
+    var isShuffleEnabled: Boolean = false
+        private set
+
+    fun toggleShuffle() {
+        isShuffleEnabled = !isShuffleEnabled
+    }
+
+
 
     val hasPrevious: Boolean
         get() = currentIndex > 0
