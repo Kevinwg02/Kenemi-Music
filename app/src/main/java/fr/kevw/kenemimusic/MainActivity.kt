@@ -40,6 +40,10 @@ import androidx.compose.ui.graphics.Color
 import kotlin.math.abs
 import kotlin.math.sign
 
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Folder
+import java.io.File
+
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
@@ -88,6 +92,11 @@ data class Playlist(
     val songIds: List<Long>,
     val createdAt: Long = System.currentTimeMillis()
 )
+data class MusicFolder(
+    val path: String,
+    val name: String,
+    val songCount: Int
+)
 
 enum class RepeatMode {
     OFF, ONE, ALL
@@ -99,6 +108,7 @@ class MainActivity : ComponentActivity() {
     private val albums = mutableStateListOf<Album>()
     private val artists = mutableStateListOf<Artist>()
     private val playlists = mutableStateListOf<Playlist>()
+    private val folders = mutableStateListOf<MusicFolder>()
     private var hasPermission by mutableStateOf(false)
 
     // MODIFIÉ : Utiliser mutableStateOf pour forcer la recomposition
@@ -170,6 +180,7 @@ class MainActivity : ComponentActivity() {
                         albums = albums,
                         artists = artists,
                         playlists = playlists,
+                        folders = folders, // AJOUTÉ
                         hasPermission = hasPermission,
                         musicPlayer = player,
                         onRequestPermission = { requestPermission.launch(getPermissionString()) },
@@ -207,6 +218,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // MODIFIEZ la fonction checkPermission() pour charger les dossiers
     private fun checkPermission() {
         hasPermission = ContextCompat.checkSelfPermission(
             this,
@@ -217,6 +229,7 @@ class MainActivity : ComponentActivity() {
             loadSongs()
             loadAlbums()
             loadArtists()
+            loadFolders()
         }
     }
 
@@ -273,6 +286,7 @@ class MainActivity : ComponentActivity() {
 
         songs.clear()
         songs.addAll(songList)
+        loadFolders()
     }
 
     private fun loadAlbums() {
@@ -363,6 +377,33 @@ class MainActivity : ComponentActivity() {
             serviceBound = false
         }
     }
+
+private fun loadFolders() {
+    val folderMap = mutableMapOf<String, MutableList<Song>>()
+
+    // Grouper les chansons par dossier
+    songs.forEach { song ->
+        val path = song.uri.path ?: return@forEach
+        val folderPath = File(path).parent ?: return@forEach
+        val folderName = File(folderPath).name
+
+        if (!folderMap.containsKey(folderPath)) {
+            folderMap[folderPath] = mutableListOf()
+        }
+        folderMap[folderPath]?.add(song)
+    }
+
+    // Créer la liste des dossiers
+    val folderList = folderMap.map { (path, songs) ->
+        MusicFolder(
+            path = path,
+            name = File(path).name,
+            songCount = songs.size
+        )
+    }.sortedBy { it.name }
+
+    folders.clear()
+    folders.addAll(folderList)
 }
 @Composable
 fun MusicApp(
@@ -370,6 +411,7 @@ fun MusicApp(
     albums: List<Album>,
     artists: List<Artist>,
     playlists: List<Playlist>,
+    folders: List<MusicFolder>, // AJOUTÉ
     hasPermission: Boolean,
     musicPlayer: MusicService,
     onRequestPermission: () -> Unit,
@@ -381,13 +423,7 @@ fun MusicApp(
     var selectedArtist by remember { mutableStateOf<Artist?>(null) }
     var selectedAlbum by remember { mutableStateOf<Album?>(null) }
     var selectedPlaylist by remember { mutableStateOf<Playlist?>(null) }
-
-    // SUPPRIMÉ: Ne plus définir la playlist globalement ici
-    // LaunchedEffect(songs) {
-    //     if (songs.isNotEmpty()) {
-    //         musicPlayer.setPlaylist(songs)
-    //     }
-    // }
+    var selectedFolder by remember { mutableStateOf<MusicFolder?>(null) } // AJOUTÉ
 
     LaunchedEffect(selectedTab) {
         if (selectedTab == 2) {
@@ -398,6 +434,9 @@ fun MusicApp(
         }
         if (selectedTab == 4) {
             selectedPlaylist = null
+        }
+        if (selectedTab == 5) { // AJOUTÉ
+            selectedFolder = null
         }
     }
 
@@ -436,6 +475,12 @@ fun MusicApp(
                     selected = selectedTab == 4,
                     onClick = { selectedTab = 4 }
                 )
+                NavigationBarItem( // AJOUTÉ
+                    icon = { Icon(Icons.Default.Folder, contentDescription = "Dossiers") },
+                    label = { Text("Dossiers") },
+                    selected = selectedTab == 5,
+                    onClick = { selectedTab = 5 }
+                )
             }
         }
     ) { padding ->
@@ -451,7 +496,6 @@ fun MusicApp(
                     hasPermission = hasPermission,
                     onRequestPermission = onRequestPermission,
                     onSongClick = { song ->
-                        // MODIFIÉ: Définir la playlist avec toutes les chansons
                         musicPlayer.setPlaylist(songs)
                         musicPlayer.playSong(song)
                         selectedTab = 0
@@ -465,7 +509,6 @@ fun MusicApp(
                             songs = albumSongs,
                             onBack = { selectedAlbum = null },
                             onSongClick = { song ->
-                                // MODIFIÉ: Définir la playlist avec uniquement les chansons de l'album
                                 musicPlayer.setPlaylist(albumSongs)
                                 musicPlayer.playSong(song)
                                 selectedTab = 0
@@ -488,7 +531,6 @@ fun MusicApp(
                             songs = artistSongs,
                             onBack = { selectedArtist = null },
                             onSongClick = { song ->
-                                // MODIFIÉ: Définir la playlist avec uniquement les chansons de l'artiste
                                 musicPlayer.setPlaylist(artistSongs)
                                 musicPlayer.playSong(song)
                                 selectedTab = 0
@@ -512,7 +554,6 @@ fun MusicApp(
                             allSongs = songs,
                             onBack = { selectedPlaylist = null },
                             onSongClick = { song ->
-                                // MODIFIÉ: Définir la playlist avec uniquement les chansons de la playlist
                                 musicPlayer.setPlaylist(playlistSongs)
                                 musicPlayer.playSong(song)
                                 selectedTab = 0
@@ -537,10 +578,36 @@ fun MusicApp(
                         )
                     }
                 }
+                5 -> { // AJOUTÉ : Onglet Dossiers
+                    if (selectedFolder != null) {
+                        val folderSongs = songs.filter { song ->
+                            val path = song.uri.path ?: ""
+                            File(path).parent == selectedFolder!!.path
+                        }
+                        FolderDetailScreen(
+                            folder = selectedFolder!!,
+                            songs = folderSongs,
+                            onBack = { selectedFolder = null },
+                            onSongClick = { song ->
+                                musicPlayer.setPlaylist(folderSongs)
+                                musicPlayer.playSong(song)
+                                selectedTab = 0
+                            }
+                        )
+                    } else {
+                        FoldersScreen(
+                            folders = folders,
+                            hasPermission = hasPermission,
+                            onRequestPermission = onRequestPermission,
+                            onFolderClick = { folder -> selectedFolder = folder }
+                        )
+                    }
+                }
             }
         }
     }
 }
+
 @Composable
 fun PlaylistsScreen(
     playlists: List<Playlist>,
@@ -1067,6 +1134,7 @@ fun CreatePlaylistDialog(
     }
 }
 
+
 @Composable
 fun MusicPlayerScreen(
     musicPlayer: MusicService
@@ -1074,6 +1142,7 @@ fun MusicPlayerScreen(
     val currentSong = musicPlayer.currentSong
     val isPlaying = musicPlayer.isPlaying
     val repeatMode = musicPlayer.repeatMode
+    val isShuffleEnabled = musicPlayer.isShuffleEnabled
     val songTitle = currentSong?.title ?: "Aucune chanson"
     val artistName = currentSong?.artist ?: "Sélectionnez une chanson"
 
@@ -1221,8 +1290,33 @@ fun MusicPlayerScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                FilledTonalIconButton(
+                    onClick = { musicPlayer.toggleShuffle() },
+                    modifier = Modifier.size(48.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = if (isShuffleEnabled) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = if (isShuffleEnabled) "Mode aléatoire activé" else "Mode aléatoire désactivé",
+                        tint = if (isShuffleEnabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
                 FilledTonalIconButton(
                     onClick = { musicPlayer.toggleRepeatMode() },
                     modifier = Modifier.size(48.dp),
@@ -1256,7 +1350,6 @@ fun MusicPlayerScreen(
         }
     }
 }
-
 @Composable
 fun SongListScreen(
     songs: List<Song>,
@@ -1881,4 +1974,240 @@ fun ArtistDetailScreen(
             }
         }
     }
+}
+@Composable
+fun FoldersScreen(
+    folders: List<MusicFolder>,
+    hasPermission: Boolean,
+    onRequestPermission: () -> Unit,
+    onFolderClick: (MusicFolder) -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Dossiers (${folders.size})") },
+                modifier = Modifier.height(60.dp),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { padding ->
+        if (!hasPermission) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Permission nécessaire",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Nous avons besoin d'accéder à vos fichiers audio",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(onClick = onRequestPermission) {
+                        Text("Autoriser l'accès")
+                    }
+                }
+            }
+        } else if (folders.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Aucun dossier trouvé")
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                items(folders) { folder ->
+                    FolderItem(
+                        folder = folder,
+                        onClick = { onFolderClick(folder) }
+                    )
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FolderItem(folder: MusicFolder, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Card(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(8.dp)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Folder,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = folder.name,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${folder.songCount} chansons",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+fun FolderDetailScreen(
+    folder: MusicFolder,
+    songs: List<Song>,
+    onBack: () -> Unit,
+    onSongClick: (Song) -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(folder.name) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, "Retour")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // En-tête du dossier
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column {
+                        Text(
+                            text = folder.name,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${songs.size} chansons",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Liste des chansons
+            if (songs.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Aucune chanson dans ce dossier",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(songs) { song ->
+                        SongItem(song = song, onClick = { onSongClick(song) })
+                        HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
+}
 }
