@@ -1187,9 +1187,10 @@ fun MusicPlayerScreen(
         ) {
             Card(
                 modifier = Modifier
-                    .size(280.dp)
-                    .clip(RoundedCornerShape(16.dp)),
+                    .size(280.dp)//icon musique
+                    .clip(RoundedCornerShape(36.dp)),//borderround
                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+
             ) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -1245,42 +1246,19 @@ fun MusicPlayerScreen(
             Spacer(modifier = Modifier.height(2.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                FilledTonalIconButton(
-                    onClick = { musicPlayer.toggleShuffle() },
-                    modifier = Modifier.size(48.dp),
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = if (isShuffleEnabled) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        }
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Shuffle,
-                        contentDescription = if (isShuffleEnabled) "Mode aléatoire activé" else "Mode aléatoire désactivé",
-                        tint = if (isShuffleEnabled) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
 
-                Spacer(modifier = Modifier.width(16.dp))
-
+                // --- REPEAT (gauche) ---
                 FilledTonalIconButton(
                     onClick = { musicPlayer.toggleRepeatMode() },
                     modifier = Modifier.size(48.dp),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = if (repeatMode != RepeatMode.OFF) {
+                        containerColor = if (repeatMode != RepeatMode.OFF)
                             MaterialTheme.colorScheme.primaryContainer
-                        } else {
+                        else
                             MaterialTheme.colorScheme.surfaceVariant
-                        }
                     )
                 ) {
                     Icon(
@@ -1294,64 +1272,79 @@ fun MusicPlayerScreen(
                             RepeatMode.ONE -> "Répéter cette chanson"
                             RepeatMode.ALL -> "Répéter toute la playlist"
                         },
-                        tint = if (repeatMode != RepeatMode.OFF) {
+                        tint = if (repeatMode != RepeatMode.OFF)
                             MaterialTheme.colorScheme.primary
-                        } else {
+                        else
                             MaterialTheme.colorScheme.onSurfaceVariant
-                        }
+                    )
+                }
+
+
+                // --- CONTROLS AU CENTRE ---
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledTonalIconButton(
+                        onClick = { musicPlayer.playPrevious() },
+                        modifier = Modifier.size(64.dp),
+                        enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL
+                    ) {
+                        Icon(Icons.Default.SkipPrevious, contentDescription = "Précédent", modifier = Modifier.size(32.dp))
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    FloatingActionButton(
+                        onClick = {
+                            if (isPlaying) musicPlayer.pause() else musicPlayer.resume()
+                        },
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    FilledTonalIconButton(
+                        onClick = { musicPlayer.playNext() },
+                        modifier = Modifier.size(64.dp),
+                        enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL
+                    ) {
+                        Icon(Icons.Default.SkipNext, contentDescription = "Suivant", modifier = Modifier.size(32.dp))
+                    }
+                }
+
+
+                // --- SHUFFLE (droite) ---
+                FilledTonalIconButton(
+                    onClick = { musicPlayer.toggleShuffle() },
+                    modifier = Modifier.size(48.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = if (isShuffleEnabled)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = if (isShuffleEnabled)
+                            "Mode aléatoire activé"
+                        else
+                            "Mode aléatoire désactivé",
+                        tint = if (isShuffleEnabled)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FilledTonalIconButton(
-                    onClick = { musicPlayer.playPrevious() },
-                    modifier = Modifier.size(64.dp),
-                    enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Précédent",
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-
-                FloatingActionButton(
-                    onClick = {
-                        if (currentSong != null) {
-                            if (isPlaying) {
-                                musicPlayer.pause()
-                            } else {
-                                musicPlayer.resume()
-                            }
-                        }
-                    },
-                    modifier = Modifier.size(72.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-
-                FilledTonalIconButton(
-                    onClick = { musicPlayer.playNext() },
-                    modifier = Modifier.size(64.dp),
-                    enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Suivant",
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-            }
 
 
 
