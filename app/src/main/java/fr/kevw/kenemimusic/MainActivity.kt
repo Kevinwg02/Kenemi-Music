@@ -1,11 +1,9 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package fr.kevw.kenemimusic
-
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
-import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -13,10 +11,7 @@ import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,8 +23,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -37,9 +30,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.Color
-import kotlin.math.abs
-import kotlin.math.sign
-
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Folder
 import java.io.File
@@ -48,13 +38,24 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+
+
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
 fun customColorScheme() = darkColorScheme(
     //icon dans lecteur et liste des chansons+ bare de lecture+bouton repeate
     Color(0xFF7A7A7A), primaryContainer = Color(0xFFFFFFFF),//bouton play (main color)
     onPrimaryContainer = Color(0xFF020202),//Bouton (couleur interne)
-    //surface = Color(0xFFFF0000),
+//    surface = Color(0xFF070054), //topbar + playlist modal
    onSurface = Color(0xC2C2C2FF),//nav actif + désactiver bouton R et S / Titre police
     onSurfaceVariant = Color(0xFFFFFFFF),//nav désactiver + lecteur artiste
     //surfaceVariant = Color(0xFF000000), //complete nav
@@ -428,6 +429,8 @@ private fun loadFolders() {
     folders.clear()
     folders.addAll(folderList)
 }
+
+
 @Composable
 fun MusicApp(
     songs: List<Song>,
@@ -470,37 +473,37 @@ fun MusicApp(
             ) {
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.PlayArrow, contentDescription = "Lecteur") },
-                    label = { Text("Lecteur") },
+
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.MusicNote, contentDescription = "Chansons") },
-                    label = { Text("Chansons") },
+
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Album, contentDescription = "Albums") },
-                    label = { Text("Albums") },
+
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Person, contentDescription = "Artistes") },
-                    label = { Text("Artistes") },
+
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.QueueMusic, contentDescription = "Playlists") },
-                    label = { Text("Playlists") },
+
                     selected = selectedTab == 4,
                     onClick = { selectedTab = 4 }
                 )
                 NavigationBarItem( // AJOUTÉ
                     icon = { Icon(Icons.Default.Folder, contentDescription = "Dossiers") },
-                    label = { Text("Dossiers") },
+
                     selected = selectedTab == 5,
                     onClick = { selectedTab = 5 }
                 )
@@ -644,18 +647,7 @@ fun PlaylistsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Playlists (${playlists.size})") },
-                modifier = Modifier.height(60.dp),
-                actions = {
-                    IconButton(onClick = { showCreateDialog = true }) {
-                        Icon(Icons.Default.Add, "Créer une playlist")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
+
         }
     ) { padding ->
         if (!hasPermission) {
@@ -1228,7 +1220,7 @@ fun MusicPlayerScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             Column(modifier = Modifier.fillMaxWidth()) {
                 Slider(
@@ -1250,59 +1242,7 @@ fun MusicPlayerScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FilledTonalIconButton(
-                    onClick = { musicPlayer.playPrevious() },
-                    modifier = Modifier.size(64.dp),
-                    enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Précédent",
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-
-                FloatingActionButton(
-                    onClick = {
-                        if (currentSong != null) {
-                            if (isPlaying) {
-                                musicPlayer.pause()
-                            } else {
-                                musicPlayer.resume()
-                            }
-                        }
-                    },
-                    modifier = Modifier.size(72.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-
-                FilledTonalIconButton(
-                    onClick = { musicPlayer.playNext() },
-                    modifier = Modifier.size(64.dp),
-                    enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Suivant",
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
+            Spacer(modifier = Modifier.height(2.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
@@ -1362,9 +1302,63 @@ fun MusicPlayerScreen(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilledTonalIconButton(
+                    onClick = { musicPlayer.playPrevious() },
+                    modifier = Modifier.size(64.dp),
+                    enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SkipPrevious,
+                        contentDescription = "Précédent",
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                FloatingActionButton(
+                    onClick = {
+                        if (currentSong != null) {
+                            if (isPlaying) {
+                                musicPlayer.pause()
+                            } else {
+                                musicPlayer.resume()
+                            }
+                        }
+                    },
+                    modifier = Modifier.size(72.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+
+                FilledTonalIconButton(
+                    onClick = { musicPlayer.playNext() },
+                    modifier = Modifier.size(64.dp),
+                    enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SkipNext,
+                        contentDescription = "Suivant",
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+
+
+
         }
     }
 }
+
 @Composable
 fun SongListScreen(
     songs: List<Song>,
@@ -1374,13 +1368,7 @@ fun SongListScreen(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Mes chansons (${songs.size})") },
-                modifier = Modifier.height(60.dp),
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
+
         }
     ) { padding ->
         if (!hasPermission) {
@@ -1972,15 +1960,7 @@ fun FoldersScreen(
     onFolderClick: (MusicFolder) -> Unit
 ) {
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Dossiers (${folders.size})") },
-                modifier = Modifier.height(60.dp),
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
+
     ) { padding ->
         if (!hasPermission) {
             Box(
