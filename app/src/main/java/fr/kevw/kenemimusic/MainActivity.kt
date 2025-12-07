@@ -1183,15 +1183,7 @@ fun MusicPlayerScreen(
     } else 0f
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("KenemiMusic") },
-                modifier = Modifier.height(60.dp),
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
+
     ) { padding ->
         Column(
             modifier = Modifier
@@ -1469,15 +1461,7 @@ fun AlbumsScreen(
     onAlbumClick: (Album) -> Unit
 ) {
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Albums (${albums.size})") },
-                modifier = Modifier.height(60.dp),
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
+
     ) { padding ->
         if (!hasPermission) {
             Box(
@@ -1660,13 +1644,7 @@ fun ArtistsScreen(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Artistes (${artists.size})") },
-                modifier = Modifier.height(60.dp),
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
+
         }
     ) { padding ->
         if (!hasPermission) {
@@ -1901,19 +1879,7 @@ fun ArtistDetailScreen(
     onSongClick: (Song) -> Unit
 ) {
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(artist.name) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Retour")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
+
     ) { padding ->
         Column(
             modifier = Modifier
