@@ -152,6 +152,13 @@ class MusicService : Service() {
 
             mediaPlayer?.release()
             mediaPlayer = MediaPlayer().apply {
+                // AJOUT : Listener d'erreur AVANT prepare()
+                setOnErrorListener { mp, what, extra ->
+                    // Gérer l'erreur
+                    handlePlaybackError(song)
+                    true // Indique que l'erreur est gérée
+                }
+
                 setDataSource(this@MusicService, song.uri)
                 prepare()
                 setOnCompletionListener { handleSongCompletion() }
@@ -164,11 +171,29 @@ class MusicService : Service() {
 
             startForeground(NOTIFICATION_ID, buildNotification())
             onStateChanged?.invoke()
+
         } catch (e: Exception) {
             e.printStackTrace()
+            // AJOUT : Tenter la chanson suivante
+            handlePlaybackError(song)
         }
     }
 
+    private fun handlePlaybackError(failedSong: Song) {
+        // Log ou notification à l'utilisateur (optionnel)
+        android.util.Log.e("MusicService", "Impossible de lire: ${failedSong.title}")
+
+        // Passer automatiquement à la chanson suivante
+        if (hasNext) {
+            playNext()
+        } else if (hasPrevious) {
+            playPrevious()
+        } else {
+            // Plus aucune chanson disponible
+            isPlaying = false
+            currentSong = null
+        }
+    }
     fun pause() {
         mediaPlayer?.pause()
         isPlaying = false

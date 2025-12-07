@@ -275,12 +275,35 @@ class MainActivity : ComponentActivity() {
                 val albumId = cursor.getLong(albumIdColumn)
                 val album = cursor.getString(albumColumn)
 
+                // VÉRIFICATION 1 : Filtrer les fichiers avec durée invalide
+                if (duration <= 0) {
+                    continue // Sauter ce fichier
+                }
+
                 val uri = ContentUris.withAppendedId(
                     MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                     id
                 )
 
-                songList.add(Song(id, title, artist ?: "Artiste inconnu", duration, uri, albumId, album ?: "Album inconnu"))
+                // VÉRIFICATION 2 : Vérifier si le fichier est accessible
+                try {
+                    contentResolver.openInputStream(uri)?.close()
+                } catch (e: Exception) {
+                    continue // Fichier inaccessible, on le saute
+                }
+
+                // Si on arrive ici, le fichier est valide, on l'ajoute
+                songList.add(
+                    Song(
+                        id,
+                        title,
+                        artist ?: "Artiste inconnu",
+                        duration,
+                        uri,
+                        albumId,
+                        album ?: "Album inconnu"
+                    )
+                )
             }
         }
 
