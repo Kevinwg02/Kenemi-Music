@@ -33,33 +33,38 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Folder
 import java.io.File
-
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
-
-
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Dp
 
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
+import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
 fun customColorScheme() = darkColorScheme(
-    //icon dans lecteur et liste des chansons+ bare de lecture+bouton repeate
-    Color(0xFF7A7A7A), primaryContainer = Color(0xFFFFFFFF),//bouton play (main color)
-    onPrimaryContainer = Color(0xFF020202),//Bouton (couleur interne)
-//    surface = Color(0xFF070054), //topbar + playlist modal
-   onSurface = Color(0xC2C2C2FF),//nav actif + désactiver bouton R et S / Titre police
-    onSurfaceVariant = Color(0xFFFFFFFF),//nav désactiver + lecteur artiste
-    //surfaceVariant = Color(0xFF000000), //complete nav
-
+    primary = Color(0xFF7A7A7A),              // Icônes dans lecteur et liste des chansons
+    primaryContainer = Color(0xFFFFFFFF),     // Bouton play (main color)
+    onPrimaryContainer = Color(0xFF020202),   // Bouton (couleur interne)
+    surface = Color(0xFF1C1C1E),              // Fond principal de l'app
+    onSurface = Color(0xC2C2C2FF),            // Nav actif + titres
+    onSurfaceVariant = Color(0xFFFFFFFF),     // Nav désactivé + lecteur artiste
+    surfaceVariant = Color(0xFF000000)        // Barre de navigation (dock)
 )
 
 data class Song(
@@ -219,7 +224,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // MODIFIEZ la fonction checkPermission() pour charger les dossiers
     private fun checkPermission() {
         hasPermission = ContextCompat.checkSelfPermission(
             this,
@@ -430,210 +434,192 @@ private fun loadFolders() {
     folders.addAll(folderList)
 }
 
+    @Composable
+    fun MusicApp(
+        songs: List<Song>,
+        albums: List<Album>,
+        artists: List<Artist>,
+        playlists: List<Playlist>,
+        folders: List<MusicFolder>,
+        hasPermission: Boolean,
+        musicPlayer: MusicService,
+        onRequestPermission: () -> Unit,
+        onCreatePlaylist: (String, List<Long>) -> Unit,
+        onDeletePlaylist: (Playlist) -> Unit,
+        onUpdatePlaylist: (String, String, List<Long>) -> Unit
+    ) {
+        var selectedTab by remember { mutableStateOf(0) }
+        var selectedArtist by remember { mutableStateOf<Artist?>(null) }
+        var selectedAlbum by remember { mutableStateOf<Album?>(null) }
+        var selectedPlaylist by remember { mutableStateOf<Playlist?>(null) }
+        var selectedFolder by remember { mutableStateOf<MusicFolder?>(null) }
 
-@Composable
-fun MusicApp(
-    songs: List<Song>,
-    albums: List<Album>,
-    artists: List<Artist>,
-    playlists: List<Playlist>,
-    folders: List<MusicFolder>, // AJOUTÉ
-    hasPermission: Boolean,
-    musicPlayer: MusicService,
-    onRequestPermission: () -> Unit,
-    onCreatePlaylist: (String, List<Long>) -> Unit,
-    onDeletePlaylist: (Playlist) -> Unit,
-    onUpdatePlaylist: (String, String, List<Long>) -> Unit
-) {
-    var selectedTab by remember { mutableStateOf(0) }
-    var selectedArtist by remember { mutableStateOf<Artist?>(null) }
-    var selectedAlbum by remember { mutableStateOf<Album?>(null) }
-    var selectedPlaylist by remember { mutableStateOf<Playlist?>(null) }
-    var selectedFolder by remember { mutableStateOf<MusicFolder?>(null) } // AJOUTÉ
-
-    LaunchedEffect(selectedTab) {
-        if (selectedTab == 2) {
-            selectedAlbum = null
+        LaunchedEffect(selectedTab) {
+            if (selectedTab == 2) selectedAlbum = null
+            if (selectedTab == 3) selectedArtist = null
+            if (selectedTab == 4) selectedPlaylist = null
+            if (selectedTab == 5) selectedFolder = null
         }
-        if (selectedTab == 3) {
-            selectedArtist = null
-        }
-        if (selectedTab == 4) {
-            selectedPlaylist = null
-        }
-        if (selectedTab == 5) { // AJOUTÉ
-            selectedFolder = null
-        }
-    }
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ) {
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = "Lecteur") },
-
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.MusicNote, contentDescription = "Chansons") },
-
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.Album, contentDescription = "Albums") },
-
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Artistes") },
-
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.QueueMusic, contentDescription = "Playlists") },
-
-                    selected = selectedTab == 4,
-                    onClick = { selectedTab = 4 }
-                )
-                NavigationBarItem( // AJOUTÉ
-                    icon = { Icon(Icons.Default.Folder, contentDescription = "Dossiers") },
-
-                    selected = selectedTab == 5,
-                    onClick = { selectedTab = 5 }
-                )
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.surface,
+            bottomBar = {
+                NavigationBar(
+                    containerColor = Color(0xFF000000).copy(alpha = 0.85f),
+                    modifier = Modifier.height(40.dp)
+                ) {
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.PlayArrow, "Lecteur", Modifier.size(26.dp)) },
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.MusicNote, "Chansons", Modifier.size(26.dp)) },
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Album, "Albums", Modifier.size(26.dp)) },
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Person, "Artistes", Modifier.size(26.dp)) },
+                        selected = selectedTab == 3,
+                        onClick = { selectedTab = 3 }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.QueueMusic, "Playlists", Modifier.size(26.dp)) },
+                        selected = selectedTab == 4,
+                        onClick = { selectedTab = 4 }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Folder, "Dossiers", Modifier.size(26.dp)) },
+                        selected = selectedTab == 5,
+                        onClick = { selectedTab = 5 }
+                    )
+                }
             }
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            when (selectedTab) {
-                0 -> MusicPlayerScreen(musicPlayer = musicPlayer)
-                1 -> SongListScreen(
-                    songs = songs,
-                    hasPermission = hasPermission,
-                    onRequestPermission = onRequestPermission,
-                    onSongClick = { song ->
-                        musicPlayer.setPlaylist(songs)
-                        musicPlayer.playSong(song)
-                        selectedTab = 0
-                    }
-                )
-                2 -> {
-                    if (selectedAlbum != null) {
-                        val albumSongs = songs.filter { it.albumId == selectedAlbum!!.id }
-                        AlbumDetailScreen(
-                            album = selectedAlbum!!,
-                            songs = albumSongs,
-                            onBack = { selectedAlbum = null },
-                            onSongClick = { song ->
-                                musicPlayer.setPlaylist(albumSongs)
-                                musicPlayer.playSong(song)
-                                selectedTab = 0
-                            }
-                        )
-                    } else {
-                        AlbumsScreen(
-                            albums = albums,
-                            hasPermission = hasPermission,
-                            onRequestPermission = onRequestPermission,
-                            onAlbumClick = { album -> selectedAlbum = album }
-                        )
-                    }
-                }
-                3 -> {
-                    if (selectedArtist != null) {
-                        val artistSongs = songs.filter { it.artist == selectedArtist!!.name }
-                        ArtistDetailScreen(
-                            artist = selectedArtist!!,
-                            songs = artistSongs,
-                            onBack = { selectedArtist = null },
-                            onSongClick = { song ->
-                                musicPlayer.setPlaylist(artistSongs)
-                                musicPlayer.playSong(song)
-                                selectedTab = 0
-                            }
-                        )
-                    } else {
-                        ArtistsScreen(
-                            artists = artists,
-                            hasPermission = hasPermission,
-                            onRequestPermission = onRequestPermission,
-                            onArtistClick = { artist -> selectedArtist = artist }
-                        )
-                    }
-                }
-                4 -> {
-                    if (selectedPlaylist != null) {
-                        val playlistSongs = songs.filter { song -> selectedPlaylist!!.songIds.contains(song.id) }
-                        PlaylistDetailScreen(
-                            playlist = selectedPlaylist!!,
-                            songs = playlistSongs,
-                            allSongs = songs,
-                            onBack = { selectedPlaylist = null },
-                            onSongClick = { song ->
-                                musicPlayer.setPlaylist(playlistSongs)
-                                musicPlayer.playSong(song)
-                                selectedTab = 0
-                            },
-                            onDeletePlaylist = {
-                                onDeletePlaylist(selectedPlaylist!!)
-                                selectedPlaylist = null
-                            },
-                            onUpdatePlaylist = { newName, newSongIds ->
-                                onUpdatePlaylist(selectedPlaylist!!.id, newName, newSongIds)
-                                selectedPlaylist = selectedPlaylist!!.copy(name = newName, songIds = newSongIds)
-                            }
-                        )
-                    } else {
-                        PlaylistsScreen(
-                            playlists = playlists,
-                            songs = songs,
-                            hasPermission = hasPermission,
-                            onRequestPermission = onRequestPermission,
-                            onPlaylistClick = { playlist -> selectedPlaylist = playlist },
-                            onCreatePlaylist = onCreatePlaylist
-                        )
-                    }
-                }
-                5 -> { // AJOUTÉ : Onglet Dossiers
-                    if (selectedFolder != null) {
-                        val folderSongs = songs.filter { song ->
-                            val path = song.uri.path ?: ""
-                            File(path).parent == selectedFolder!!.path
+        ) { padding ->
+            Box(modifier = Modifier.padding(padding)) {
+                when (selectedTab) {
+                    0 -> MusicPlayerScreen(musicPlayer = musicPlayer)
+                    1 -> SongListScreen(
+                        songs = songs,
+                        hasPermission = hasPermission,
+                        onRequestPermission = onRequestPermission,
+                        onSongClick = { song ->
+                            musicPlayer.setPlaylist(songs)
+                            musicPlayer.playSong(song)
+                            selectedTab = 0
                         }
-                        FolderDetailScreen(
-                            folder = selectedFolder!!,
-                            songs = folderSongs,
-                            onBack = { selectedFolder = null },
-                            onSongClick = { song ->
-                                musicPlayer.setPlaylist(folderSongs)
-                                musicPlayer.playSong(song)
-                                selectedTab = 0
+                    )
+                    2 -> {
+                        if (selectedAlbum != null) {
+                            val albumSongs = songs.filter { it.albumId == selectedAlbum!!.id }
+                            AlbumDetailScreen(
+                                album = selectedAlbum!!,
+                                songs = albumSongs,
+                                onBack = { selectedAlbum = null },
+                                onSongClick = { song ->
+                                    musicPlayer.setPlaylist(albumSongs)
+                                    musicPlayer.playSong(song)
+                                    selectedTab = 0
+                                }
+                            )
+                        } else {
+                            AlbumsScreen(
+                                albums = albums,
+                                hasPermission = hasPermission,
+                                onRequestPermission = onRequestPermission,
+                                onAlbumClick = { album -> selectedAlbum = album }
+                            )
+                        }
+                    }
+                    3 -> {
+                        if (selectedArtist != null) {
+                            val artistSongs = songs.filter { it.artist == selectedArtist!!.name }
+                            ArtistDetailScreen(
+                                artist = selectedArtist!!,
+                                songs = artistSongs,
+                                onBack = { selectedArtist = null },
+                                onSongClick = { song ->
+                                    musicPlayer.setPlaylist(artistSongs)
+                                    musicPlayer.playSong(song)
+                                    selectedTab = 0
+                                }
+                            )
+                        } else {
+                            ArtistsScreen(
+                                artists = artists,
+                                hasPermission = hasPermission,
+                                onRequestPermission = onRequestPermission,
+                                onArtistClick = { artist -> selectedArtist = artist }
+                            )
+                        }
+                    }
+                    4 -> {
+                        if (selectedPlaylist != null) {
+                            val playlistSongs = songs.filter { song -> selectedPlaylist!!.songIds.contains(song.id) }
+                            PlaylistDetailScreen(
+                                playlist = selectedPlaylist!!,
+                                songs = playlistSongs,
+                                allSongs = songs,
+                                onBack = { selectedPlaylist = null },
+                                onSongClick = { song ->
+                                    musicPlayer.setPlaylist(playlistSongs)
+                                    musicPlayer.playSong(song)
+                                    selectedTab = 0
+                                },
+                                onDeletePlaylist = {
+                                    onDeletePlaylist(selectedPlaylist!!)
+                                    selectedPlaylist = null
+                                },
+                                onUpdatePlaylist = { newName, newSongIds ->
+                                    onUpdatePlaylist(selectedPlaylist!!.id, newName, newSongIds)
+                                    selectedPlaylist = selectedPlaylist!!.copy(name = newName, songIds = newSongIds)
+                                }
+                            )
+                        } else {
+                            PlaylistsScreen(
+                                playlists = playlists,
+                                songs = songs,
+                                hasPermission = hasPermission,
+                                onRequestPermission = onRequestPermission,
+                                onPlaylistClick = { playlist -> selectedPlaylist = playlist },
+                                onCreatePlaylist = onCreatePlaylist
+                            )
+                        }
+                    }
+                    5 -> {
+                        if (selectedFolder != null) {
+                            val folderSongs = songs.filter { song ->
+                                val path = song.uri.path ?: ""
+                                File(path).parent == selectedFolder!!.path
                             }
-                        )
-                    } else {
-                        FoldersScreen(
-                            folders = folders,
-                            hasPermission = hasPermission,
-                            onRequestPermission = onRequestPermission,
-                            onFolderClick = { folder -> selectedFolder = folder }
-                        )
+                            FolderDetailScreen(
+                                folder = selectedFolder!!,
+                                songs = folderSongs,
+                                onBack = { selectedFolder = null },
+                                onSongClick = { song ->
+                                    musicPlayer.setPlaylist(folderSongs)
+                                    musicPlayer.playSong(song)
+                                    selectedTab = 0
+                                }
+                            )
+                        } else {
+                            FoldersScreen(
+                                folders = folders,
+                                hasPermission = hasPermission,
+                                onRequestPermission = onRequestPermission,
+                                onFolderClick = { folder -> selectedFolder = folder }
+                            )
+                        }
                     }
                 }
             }
         }
     }
-}
-
 @Composable
 fun PlaylistsScreen(
     playlists: List<Playlist>,
