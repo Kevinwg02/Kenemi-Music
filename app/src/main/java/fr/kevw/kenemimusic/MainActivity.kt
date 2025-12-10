@@ -40,20 +40,10 @@ import android.os.IBinder
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 
-
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-import androidx.compose.ui.draw.blur
-import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.Brush
-
-import androidx.compose.foundation.Canvas
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.layout.ContentScale
 
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
@@ -1338,87 +1328,149 @@ fun MusicPlayerScreen(
     }
 }
 
-@Composable
-fun SongListScreen(
-    songs: List<Song>,
-    hasPermission: Boolean,
-    onRequestPermission: () -> Unit,
-    onSongClick: (Song) -> Unit
-) {
-    Scaffold(
-        topBar = {
-
+    @Composable
+    fun SongListScreen(
+        songs: List<Song>,
+        hasPermission: Boolean,
+        onRequestPermission: () -> Unit,
+        onSongClick: (Song) -> Unit
+    ) {
+        var searchQuery by remember { mutableStateOf("") }
+        val filteredSongs = remember(songs, searchQuery) {
+            if (searchQuery.isBlank()) {
+                songs
+            } else {
+                songs.filter { song ->
+                    song.title.contains(searchQuery, ignoreCase = true) ||
+                            song.artist.contains(searchQuery, ignoreCase = true) ||
+                            song.album.contains(searchQuery, ignoreCase = true)
+                }
+            }
         }
-    ) { padding ->
-        if (!hasPermission) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(32.dp)
+
+        Scaffold(
+            topBar = {
+                if (hasPermission && songs.isNotEmpty()) {
+                    TopAppBar(
+                        title = {
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = { Text("Rechercher une chanson...") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                leadingIcon = {
+                                    Icon(Icons.Default.Search, contentDescription = "Rechercher")
+                                },
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(Icons.Default.Close, contentDescription = "Effacer")
+                                        }
+                                    }
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color.Transparent,
+                                    unfocusedBorderColor = Color.Transparent
+                                )
+                            )
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    )
+                }
+            }
+        ) { padding ->
+            if (!hasPermission) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        modifier = Modifier.size(80.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "Permission nécessaire",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Nous avons besoin d'accéder à vos fichiers audio",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(onClick = onRequestPermission) {
-                        Text("Autoriser l'accès")
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            modifier = Modifier.size(80.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Permission nécessaire",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Nous avons besoin d'accéder à vos fichiers audio",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(onClick = onRequestPermission) {
+                            Text("Autoriser l'accès")
+                        }
                     }
                 }
-            }
-        } else if (songs.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        modifier = Modifier.size(80.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Aucune chanson trouvée")
+            } else if (songs.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            modifier = Modifier.size(80.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Aucune chanson trouvée")
+                    }
                 }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                items(songs) { song ->
-                    SongItem(
-                        song = song,
-                        onClick = { onSongClick(song) }
-                    )
-                    HorizontalDivider()
+            } else {
+                if (filteredSongs.isEmpty() && searchQuery.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(80.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("Aucun résultat pour \"$searchQuery\"")
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                    ) {
+                        items(filteredSongs) { song ->
+                            SongItem(
+                                song = song,
+                                onClick = { onSongClick(song) }
+                            )
+                            HorizontalDivider()
+                        }
+                    }
                 }
             }
         }
     }
-}
 
 @Composable
 fun AlbumsScreen(

@@ -40,12 +40,16 @@ class MusicService : Service() {
     private lateinit var audioManager: AudioManager
     private var audioFocusRequest: AudioFocusRequest? = null
 
+    // AJOUTÉ : Pour éviter la reprise automatique
+    private var wasPlayingBeforeFocusLoss = false
+
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "music_channel"
         const val ACTION_PLAY_PAUSE = "ACTION_PLAY_PAUSE"
         const val ACTION_NEXT = "ACTION_NEXT"
         const val ACTION_PREVIOUS = "ACTION_PREVIOUS"
+        const val ACTION_STOP = "ACTION_STOP" // AJOUTÉ
     }
 
     inner class MusicBinder : Binder() {
@@ -90,7 +94,8 @@ class MusicService : Service() {
                 }
 
                 override fun onStop() {
-                    pause()
+                    // MODIFIÉ : Arrêt complet au lieu de pause
+                    stopPlayback()
                 }
             })
 
@@ -102,20 +107,29 @@ class MusicService : Service() {
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
     }
 
+    // MODIFIÉ : Gestion améliorée du focus audio
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
             AudioManager.AUDIOFOCUS_LOSS -> {
+                // Perte définitive du focus (ex: un appel arrive)
+                wasPlayingBeforeFocusLoss = false
                 pause()
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                // Perte temporaire (ex: notification, vidéo Instagram)
+                // On sauvegarde l'état mais on NE reprend PAS automatiquement
+                wasPlayingBeforeFocusLoss = isPlaying
                 pause()
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                // Son en arrière-plan autorisé (ex: GPS)
                 mediaPlayer?.setVolume(0.3f, 0.3f)
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
+                // On récupère le focus
                 mediaPlayer?.setVolume(1.0f, 1.0f)
-                resume()
+                // MODIFIÉ : On NE reprend PAS automatiquement
+                // L'utilisateur doit appuyer sur play manuellement
             }
         }
     }
@@ -166,7 +180,8 @@ class MusicService : Service() {
                         PlaybackStateCompat.ACTION_PAUSE or
                         PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
                         PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                        PlaybackStateCompat.ACTION_SEEK_TO
+                        PlaybackStateCompat.ACTION_SEEK_TO or
+                        PlaybackStateCompat.ACTION_STOP // AJOUTÉ
             )
             .build()
 
@@ -180,6 +195,7 @@ class MusicService : Service() {
             }
             ACTION_NEXT -> playNext()
             ACTION_PREVIOUS -> playPrevious()
+            ACTION_STOP -> stopPlayback() // AJOUTÉ
         }
         return START_STICKY
     }
@@ -223,6 +239,13 @@ class MusicService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        // AJOUTÉ : Intent pour fermer complètement
+        val stopIntent = PendingIntent.getService(
+            this, 4,
+            Intent(this, MusicService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(currentSong?.title ?: "Aucune chanson")
             .setContentText(currentSong?.artist ?: "")
@@ -235,12 +258,16 @@ class MusicService : Service() {
                 playPauseIntent
             )
             .addAction(android.R.drawable.ic_media_next, "Suivant", nextIntent)
+            // AJOUTÉ : Bouton de fermeture dans la notification étendue
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Fermer", stopIntent)
             .setStyle(MediaStyle()
                 .setShowActionsInCompactView(0, 1, 2)
                 .setMediaSession(mediaSession.sessionToken))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOnlyAlertOnce(true)
-            .setOngoing(isPlaying)
+            .setOngoing(isPlaying) // La notification peut être balayée si en pause
+            // AJOUTÉ : Action de suppression
+            .setDeleteIntent(stopIntent)
             .build()
     }
 
@@ -313,6 +340,7 @@ class MusicService : Service() {
         mediaPlayer?.pause()
         isPlaying = false
         updatePlaybackState()
+        // MODIFIÉ : Notification non-ongoing quand en pause (peut être balayée)
         startForeground(NOTIFICATION_ID, buildNotification())
         onStateChanged?.invoke()
     }
@@ -325,6 +353,14 @@ class MusicService : Service() {
         updatePlaybackState()
         startForeground(NOTIFICATION_ID, buildNotification())
         onStateChanged?.invoke()
+    }
+
+    // AJOUTÉ : Fonction pour arrêter complètement le service
+    fun stopPlayback() {
+        pause()
+        abandonAudioFocus()
+        stopForeground(true) // Supprime la notification
+        stopSelf() // Arrête le service
     }
 
     fun playNext() {
@@ -410,5 +446,12 @@ class MusicService : Service() {
         super.onDestroy()
         mediaSession.release()
         release()
+    }
+
+    // AJOUTÉ : Gérer la tâche supprimée de la liste des tâches récentes
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // Quand l'app est fermée en glissant vers le haut
+        stopPlayback()
     }
 }
