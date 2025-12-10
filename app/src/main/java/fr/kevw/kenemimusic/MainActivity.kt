@@ -1832,117 +1832,12 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    @Composable
-    fun AlbumDetailScreen(
-        album: Album,
-        songs: List<Song>,
-        onBack: () -> Unit,
-        onSongClick: (Song) -> Unit
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(album.name) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, "Retour")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                // En-tête de l'album
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Card(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(8.dp)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Album,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        Column {
-                            Text(
-                                text = album.name,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = album.artist,
-                                fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${songs.size} chansons",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                // Liste des chansons
-                if (songs.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Aucune chanson dans cet album",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(songs) { song ->
-                            SongItem(song = song, onClick = { onSongClick(song) })
-                            HorizontalDivider()
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     @Composable
     fun AlbumDetailScreen(
         album: Album,
         songs: List<Song>,
-        imageService: ArtistImageService, // AJOUTÉ
+        imageService: ArtistImageService,
         onBack: () -> Unit,
         onSongClick: (Song) -> Unit
     ) {
@@ -2075,7 +1970,7 @@ class MainActivity : ComponentActivity() {
     fun ArtistDetailScreen(
         artist: Artist,
         songs: List<Song>,
-        imageService: ArtistImageService, // AJOUTÉ
+        imageService: ArtistImageService,
         onBack: () -> Unit,
         onSongClick: (Song) -> Unit
     ) {
@@ -2092,6 +1987,19 @@ class MainActivity : ComponentActivity() {
         }
 
         Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(artist.name) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Default.ArrowBack, "Retour")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+            }
         ) { padding ->
             Column(
                 modifier = Modifier
