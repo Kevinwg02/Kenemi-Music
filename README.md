@@ -25,9 +25,7 @@ The project is still in early development, but here’s what’s already availab
 
 <p>
 If you'd like to help, contributions are warmly welcome.
-</p>
 
-<p>
 The UI is built with Jetpack Compose for a fast and consistent experience across all devices.  
 The player runs in the background thanks to a dedicated <strong>MusicService</strong> with full notification control support.
 </p>

@@ -1,5 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package fr.kevw.kenemimusic
+
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
@@ -30,36 +31,27 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.Folder
 import java.io.File
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
-import androidx.compose.foundation.layout.size
-import androidx.compose.runtime.Composable
-
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 
-
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
 fun customColorScheme() = darkColorScheme(
-    primary = Color(0xFF7A7A7A),              // Icônes dans lecteur et liste des chansons
-    primaryContainer = Color(0xFFFFFFFF),     // Bouton play (main color)
-    onPrimaryContainer = Color(0xFF020202),   // Bouton (couleur interne)
-    surface = Color(0xFF1C1C1E),              // Fond principal de l'app
-    onSurface = Color(0xC2C2C2FF),            // Nav actif + titres
-    onSurfaceVariant = Color(0xFFFFFFFF),     // Nav désactivé + lecteur artiste
-    surfaceVariant = Color(0xFF000000)        // Barre de navigation (dock)
+    primary = Color(0xFF7A7A7A),
+    primaryContainer = Color(0xFFFFFFFF),
+    onPrimaryContainer = Color(0xFF020202),
+    surface = Color(0xFF1C1C1E),
+    onSurface = Color(0xC2C2C2FF),
+    onSurfaceVariant = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFF000000)
 )
 
 data class Song(
@@ -93,6 +85,7 @@ data class Playlist(
     val songIds: List<Long>,
     val createdAt: Long = System.currentTimeMillis()
 )
+
 data class MusicFolder(
     val path: String,
     val name: String,
@@ -103,7 +96,6 @@ enum class RepeatMode {
     OFF, ONE, ALL
 }
 
-
 class MainActivity : ComponentActivity() {
     private val songs = mutableStateListOf<Song>()
     private val albums = mutableStateListOf<Album>()
@@ -112,14 +104,16 @@ class MainActivity : ComponentActivity() {
     private val folders = mutableStateListOf<MusicFolder>()
     private var hasPermission by mutableStateOf(false)
 
-    // MODIFIÉ : Utiliser mutableStateOf pour forcer la recomposition
     private var musicService: MusicService? by mutableStateOf(null)
     private var serviceBound = false
+
+    // AJOUTÉ : Gestionnaire de playlists persistantes
+    private lateinit var playlistManager: PlaylistManager
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as MusicService.MusicBinder
-            musicService = binder.getService()  // Ceci va maintenant trigger une recomposition !
+            musicService = binder.getService()
             serviceBound = true
         }
 
@@ -137,39 +131,42 @@ class MainActivity : ComponentActivity() {
             loadSongs()
             loadAlbums()
             loadArtists()
+            loadFolders()
         }
     }
-    // Ajoute après requestPermission
+
     private val requestNotificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        // La permission a été accordée ou refusée
+        // Permission notification accordée ou refusée
     }
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // AJOUTÉ : Démarrer et lier le service
+        // AJOUTÉ : Initialiser le gestionnaire de playlists
+        playlistManager = PlaylistManager(this)
+
+        // AJOUTÉ : Charger les playlists sauvegardées
+        playlists.addAll(playlistManager.loadPlaylists())
+
+        // Démarrer et lier le service de musique
         val serviceIntent = Intent(this, MusicService::class.java)
-
-
         startService(serviceIntent)
         bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
 
         checkPermission()
-// Dans onCreate(), après checkPermission(), ajoute :
+
+        // Demander la permission de notification sur Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+
         setContent {
             val player = musicService
             val imageService = remember { ArtistImageService(this@MainActivity) }
 
-            MaterialTheme(
-                colorScheme = customColorScheme()
-            ) {
-                // Afficher un loader si le service n'est pas encore prêt
+            MaterialTheme(colorScheme = customColorScheme()) {
                 if (player == null) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -188,6 +185,7 @@ class MainActivity : ComponentActivity() {
                         imageService = imageService,
                         musicPlayer = player,
                         onRequestPermission = { requestPermission.launch(getPermissionString()) },
+                        // MODIFIÉ : Sauvegarder lors de la création
                         onCreatePlaylist = { name, songIds ->
                             val newPlaylist = Playlist(
                                 id = System.currentTimeMillis().toString(),
@@ -195,10 +193,14 @@ class MainActivity : ComponentActivity() {
                                 songIds = songIds
                             )
                             playlists.add(newPlaylist)
+                            playlistManager.addPlaylist(newPlaylist)
                         },
+                        // MODIFIÉ : Sauvegarder lors de la suppression
                         onDeletePlaylist = { playlist ->
                             playlists.remove(playlist)
+                            playlistManager.deletePlaylist(playlist.id)
                         },
+                        // MODIFIÉ : Sauvegarder lors de la mise à jour
                         onUpdatePlaylist = { playlistId, newName, newSongIds ->
                             val index = playlists.indexOfFirst { it.id == playlistId }
                             if (index != -1) {
@@ -206,6 +208,7 @@ class MainActivity : ComponentActivity() {
                                     name = newName,
                                     songIds = newSongIds
                                 )
+                                playlistManager.updatePlaylist(playlistId, newName, newSongIds)
                             }
                         }
                     )
@@ -213,6 +216,8 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+
 
     private fun getPermissionString(): String {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
