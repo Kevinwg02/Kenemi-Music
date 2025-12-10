@@ -41,6 +41,9 @@ import coil.request.ImageRequest
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.ui.text.style.TextAlign
 
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
@@ -1680,7 +1683,7 @@ class MainActivity : ComponentActivity() {
     fun ArtistsScreen(
         artists: List<Artist>,
         hasPermission: Boolean,
-        imageService: ArtistImageService, // AJOUTÉ
+        imageService: ArtistImageService,
         onRequestPermission: () -> Unit,
         onArtistClick: (Artist) -> Unit
     ) {
@@ -1740,21 +1743,98 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             } else {
-                LazyColumn(
+                // GRILLE D'ARTISTES
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 110.dp),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
                 ) {
-                    items(artists) { artist ->
-                        ArtistItem(
-                            artist = artist,
-                            onClick = { onArtistClick(artist) },
-                            imageService = imageService // AJOUTÉ
+                    items(artists.size) { index ->
+                        ArtistGridItem(
+                            artist = artists[index],
+                            onClick = { onArtistClick(artists[index]) },
+                            imageService = imageService
                         )
-                        HorizontalDivider()
                     }
                 }
             }
+        }
+    }
+
+    @Composable
+    fun ArtistGridItem(
+        artist: Artist,
+        onClick: () -> Unit,
+        imageService: ArtistImageService
+    ) {
+        var imageUrl by remember { mutableStateOf<String?>(null) }
+        var isLoading by remember { mutableStateOf(true) }
+        val scope = rememberCoroutineScope()
+        val context = LocalContext.current
+
+        LaunchedEffect(artist.name) {
+            scope.launch {
+                imageUrl = imageService.getArtistImageUrl(artist.name)
+                isLoading = false
+            }
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+        ) {
+            Card(
+                modifier = Modifier
+                    .size(110.dp)
+                    .clip(RoundedCornerShape(55.dp)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (imageUrl != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(imageUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "Photo de ${artist.name}",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(32.dp),
+                            strokeWidth = 3.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = artist.name,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
     @Composable
