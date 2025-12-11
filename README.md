@@ -30,6 +30,14 @@ If you'd like to help, contributions are warmly welcome.
 
 </p>
 
+
+<img width="445" height="972" alt="image" src="https://github.com/user-attachments/assets/8d09613f-cc2a-4dfb-96a1-7f34d2ebdcd3" />
+<img width="445" height="956" alt="image" src="https://github.com/user-attachments/assets/1e37911f-90c8-4618-a440-f2490c385762" />
+<img width="452" height="954" alt="image" src="https://github.com/user-attachments/assets/b6ef8af4-efb9-476b-9ce4-db609fb6360f" />
+<img width="452" height="954" alt="image" src="https://github.com/user-attachments/assets/8e056100-5e9b-4883-b9ad-e0ed1d4041f1" />
+
+
+
 <h2>Features (EN)</h2>
 
 <h3>📂 Music Library</h3>
