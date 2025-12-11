@@ -12,22 +12,17 @@ class PlaylistManager(context: Context) {
 
     companion object {
         private const val KEY_PLAYLISTS = "playlists"
+        private const val KEY_FAVORITES = "favorites"
+        const val FAVORITES_ID = "favorites_playlist"
     }
 
-    /**
-     * Sauvegarde toutes les playlists
-     */
     fun savePlaylists(playlists: List<Playlist>) {
         val json = gson.toJson(playlists)
         prefs.edit().putString(KEY_PLAYLISTS, json).apply()
     }
 
-    /**
-     * Charge toutes les playlists sauvegardées
-     */
     fun loadPlaylists(): List<Playlist> {
         val json = prefs.getString(KEY_PLAYLISTS, null) ?: return emptyList()
-
         return try {
             val type = object : TypeToken<List<Playlist>>() {}.type
             gson.fromJson(json, type)
@@ -37,31 +32,21 @@ class PlaylistManager(context: Context) {
         }
     }
 
-    /**
-     * Ajoute une nouvelle playlist
-     */
     fun addPlaylist(playlist: Playlist) {
         val currentPlaylists = loadPlaylists().toMutableList()
         currentPlaylists.add(playlist)
         savePlaylists(currentPlaylists)
     }
 
-    /**
-     * Supprime une playlist
-     */
     fun deletePlaylist(playlistId: String) {
         val currentPlaylists = loadPlaylists().toMutableList()
         currentPlaylists.removeAll { it.id == playlistId }
         savePlaylists(currentPlaylists)
     }
 
-    /**
-     * Met à jour une playlist existante
-     */
     fun updatePlaylist(playlistId: String, newName: String, newSongIds: List<Long>) {
         val currentPlaylists = loadPlaylists().toMutableList()
         val index = currentPlaylists.indexOfFirst { it.id == playlistId }
-
         if (index != -1) {
             currentPlaylists[index] = currentPlaylists[index].copy(
                 name = newName,
@@ -71,10 +56,51 @@ class PlaylistManager(context: Context) {
         }
     }
 
-    /**
-     * Efface toutes les playlists (utile pour debug/reset)
-     */
     fun clearAllPlaylists() {
         prefs.edit().remove(KEY_PLAYLISTS).apply()
+    }
+
+    // ===== FAVORIS =====
+
+    fun loadFavorites(): Set<Long> {
+        val json = prefs.getString(KEY_FAVORITES, null) ?: return emptySet()
+        return try {
+            val type = object : TypeToken<Set<Long>>() {}.type
+            gson.fromJson(json, type)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptySet()
+        }
+    }
+
+    private fun saveFavorites(favorites: Set<Long>) {
+        val json = gson.toJson(favorites)
+        prefs.edit().putString(KEY_FAVORITES, json).apply()
+    }
+
+    fun addToFavorites(songId: Long) {
+        val favorites = loadFavorites().toMutableSet()
+        favorites.add(songId)
+        saveFavorites(favorites)
+    }
+
+    fun removeFromFavorites(songId: Long) {
+        val favorites = loadFavorites().toMutableSet()
+        favorites.remove(songId)
+        saveFavorites(favorites)
+    }
+
+    fun isFavorite(songId: Long): Boolean {
+        return loadFavorites().contains(songId)
+    }
+
+    fun toggleFavorite(songId: Long): Boolean {
+        return if (isFavorite(songId)) {
+            removeFromFavorites(songId)
+            false
+        } else {
+            addToFavorites(songId)
+            true
+        }
     }
 }

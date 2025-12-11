@@ -1,6 +1,7 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package fr.kevw.kenemimusic
 
+
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
@@ -115,7 +116,7 @@ class MainActivity : ComponentActivity() {
     private val playlists = mutableStateListOf<Playlist>()
     private val folders = mutableStateListOf<MusicFolder>()
     private var hasPermission by mutableStateOf(false)
-
+    private val favorites = mutableStateListOf<Long>()
     private var musicService: MusicService? by mutableStateOf(null)
     private var serviceBound = false
 
@@ -161,11 +162,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // AJOUTÉ : Initialiser le gestionnaire de playlists
         playlistManager = PlaylistManager(this)
         settingsManager = SettingsManager(this)
-        // AJOUTÉ : Charger les playlists sauvegardées
         playlists.addAll(playlistManager.loadPlaylists())
+        favorites.addAll(playlistManager.loadFavorites())
 
         // Démarrer et lier le service de musique
         val serviceIntent = Intent(this, MusicService::class.java)
@@ -208,10 +208,13 @@ class MainActivity : ComponentActivity() {
                         artists = artists,
                         playlists = playlists,
                         folders = folders,
+                        favorites = favorites,
+                        playlistManager = playlistManager,
                         hasPermission = hasPermission,
                         imageService = imageService,
                         musicPlayer = player,
                         isDarkThemeState = isDarkTheme,
+
                         onRequestPermission = { requestPermission.launch(getPermissionString()) },
                         // Sauvegarder lors de la création
                         onCreatePlaylist = { name, songIds ->
@@ -238,11 +241,20 @@ class MainActivity : ComponentActivity() {
                                 )
                                 playlistManager.updatePlaylist(playlistId, newName, newSongIds)
                             }
+                        },
+                                onToggleFavorite = { songId ->
+                            val isFavorite = playlistManager.toggleFavorite(songId)
+                            if (isFavorite) {
+                                favorites.add(songId)
+                            } else {
+                                favorites.remove(songId)
+                            }
                         }
                     )
                 }
             }
         }
+
     }
 
 
@@ -476,10 +488,13 @@ class MainActivity : ComponentActivity() {
         musicPlayer: MusicService,
         imageService: ArtistImageService,
         isDarkThemeState: MutableState<Boolean>,
+        favorites: List<Long>,
+        playlistManager: PlaylistManager,
         onRequestPermission: () -> Unit,
         onCreatePlaylist: (String, List<Long>) -> Unit,
         onDeletePlaylist: (Playlist) -> Unit,
-        onUpdatePlaylist: (String, String, List<Long>) -> Unit
+        onUpdatePlaylist: (String, String, List<Long>) -> Unit,
+        onToggleFavorite: (Long) -> Unit
     ) {
         var selectedTab by remember { mutableStateOf(0) }
         var selectedArtist by remember { mutableStateOf<Artist?>(null) }
@@ -544,7 +559,9 @@ class MainActivity : ComponentActivity() {
                 when (selectedTab) {
                     0 -> MusicPlayerScreen(
                         musicPlayer = musicPlayer,
-                        imageService = imageService
+                        imageService = imageService,
+                        favorites = favorites,
+                        onToggleFavorite = onToggleFavorite
                     )
                     1 -> SongListScreen(
                         songs = songs,
@@ -582,8 +599,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     3 -> {
-
-
                         if (selectedArtist != null) {
                             val artistSongs = songs.filter { it.artist == selectedArtist!!.name }
                             val imageService = remember { ArtistImageService(this@MainActivity) }
@@ -636,9 +651,12 @@ class MainActivity : ComponentActivity() {
                                 playlists = playlists,
                                 songs = songs,
                                 hasPermission = hasPermission,
+                                favorites = favorites,
+                                playlistManager = playlistManager,
                                 onRequestPermission = onRequestPermission,
-                                onPlaylistClick = { playlist -> selectedPlaylist = playlist },
-                                onCreatePlaylist = onCreatePlaylist
+                                onPlaylistClick = { selectedPlaylist = it },
+                                onCreatePlaylist = onCreatePlaylist,
+                                onToggleFavorite = onToggleFavorite
                             )
                         }
                     }
@@ -684,15 +702,61 @@ class MainActivity : ComponentActivity() {
         playlists: List<Playlist>,
         songs: List<Song>,
         hasPermission: Boolean,
+        favorites: List<Long>,
+        playlistManager: PlaylistManager,
         onRequestPermission: () -> Unit,
         onPlaylistClick: (Playlist) -> Unit,
-        onCreatePlaylist: (String, List<Long>) -> Unit
+        onCreatePlaylist: (String, List<Long>) -> Unit,
+        onToggleFavorite: (Long) -> Unit
     ) {
         var showCreateDialog by remember { mutableStateOf(false) }
+        var selectedTabIndex by remember { mutableStateOf(0) }
+        val favoriteSongs = remember(songs, favorites) {
+            songs.filter { favorites.contains(it.id) }
+        }
 
         Scaffold(
             topBar = {
-
+                Column {
+                    TabRow(
+                        selectedTabIndex = selectedTabIndex,
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ) {
+                        Tab(
+                            selected = selectedTabIndex == 0,
+                            onClick = { selectedTabIndex = 0 },
+                            text = { Text("Favoris") },
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Default.Favorite,
+                                    contentDescription = "Favoris"
+                                )
+                            }
+                        )
+                        Tab(
+                            selected = selectedTabIndex == 1,
+                            onClick = { selectedTabIndex = 1 },
+                            text = { Text("Playlists") },
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Default.QueueMusic,
+                                    contentDescription = "Playlists"
+                                )
+                            }
+                        )
+                    }
+                }
+            },
+            floatingActionButton = {
+                // Bouton FAB uniquement sur l'onglet Playlists
+                if (selectedTabIndex == 1 && hasPermission) {
+                    FloatingActionButton(
+                        onClick = { showCreateDialog = true },
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Créer une playlist")
+                    }
+                }
             }
         ) { padding ->
             if (!hasPermission) {
@@ -707,7 +771,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(32.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.QueueMusic,
+                            imageVector = if (selectedTabIndex == 0) Icons.Default.Favorite else Icons.Default.QueueMusic,
                             contentDescription = null,
                             modifier = Modifier.size(80.dp),
                             tint = MaterialTheme.colorScheme.primary
@@ -729,43 +793,130 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-            } else if (playlists.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.QueueMusic,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Aucune playlist")
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { showCreateDialog = true }) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Créer une playlist")
+            } else {
+                when (selectedTabIndex) {
+                    0 -> {
+                        // ONGLET FAVORIS
+                        if (favoriteSongs.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(padding),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Default.FavoriteBorder,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(80.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Aucun favori")
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        "Ajoutez des chansons à vos favoris depuis le lecteur",
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 32.dp)
+                                    )
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(padding)
+                            ) {
+                                item {
+                                    // En-tête avec le nombre de favoris
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Favorite,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(32.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column {
+                                            Text(
+                                                "Mes favoris",
+                                                fontSize = 20.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                "${favoriteSongs.size} chanson${if (favoriteSongs.size > 1) "s" else ""}",
+                                                fontSize = 14.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    HorizontalDivider()
+                                }
+
+                                items(favoriteSongs) { song ->
+                                    FavoriteSongItem(
+                                        song = song,
+                                        onSongClick = { song ->
+                                            // Jouer directement la chanson
+                                        },
+                                        onRemoveFavorite = {
+                                            onToggleFavorite(song.id)
+                                        }
+                                    )
+                                    HorizontalDivider()
+                                }
+                            }
                         }
                     }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                ) {
-                    items(playlists) { playlist ->
-                        PlaylistItem(
-                            playlist = playlist,
-                            songCount = playlist.songIds.size,
-                            onClick = { onPlaylistClick(playlist) }
-                        )
-                        HorizontalDivider()
+                    1 -> {
+                        // ONGLET PLAYLISTS (code existant)
+                        if (playlists.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(padding),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Default.QueueMusic,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(80.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Aucune playlist")
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(onClick = { showCreateDialog = true }) {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Créer une playlist")
+                                    }
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(padding)
+                            ) {
+                                items(playlists) { playlist ->
+                                    PlaylistItem(
+                                        playlist = playlist,
+                                        songCount = playlist.songIds.size,
+                                        onClick = { onPlaylistClick(playlist) }
+                                    )
+                                    HorizontalDivider()
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -782,7 +933,55 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
+    @Composable
+    fun FavoriteSongItem(
+        song: Song,
+        onSongClick: (Song) -> Unit,
+        onRemoveFavorite: () -> Unit
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = { onSongClick(song) })
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(48.dp)
+                    .padding(end = 16.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
 
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = song.title,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = song.artist,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            IconButton(
+                onClick = onRemoveFavorite
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Favorite,
+                    contentDescription = "Retirer des favoris",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
     @Composable
     fun PlaylistItem(
         playlist: Playlist,
@@ -1198,7 +1397,9 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun MusicPlayerScreen(
         musicPlayer: MusicService,
-        imageService: ArtistImageService  // <- AJOUTER CE PARAMÈTRE
+        imageService: ArtistImageService,
+        favorites: List<Long>,
+        onToggleFavorite: (Long) -> Unit
     ) {
         val currentSong = musicPlayer.currentSong
         val isPlaying = musicPlayer.isPlaying
@@ -1207,14 +1408,13 @@ class MainActivity : ComponentActivity() {
         val songTitle = currentSong?.title ?: "Aucune chanson"
         val artistName = currentSong?.artist ?: "Sélectionnez une chanson"
 
-        // AJOUTÉ : Chargement de la pochette
+
         var albumCoverUrl by remember { mutableStateOf<String?>(null) }
         var isLoadingCover by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
-
-        // AJOUTÉ : Charger la pochette quand la chanson change
-        LaunchedEffect(currentSong?.albumId) {
+        val isFavorite = currentSong?.let { favorites.contains(it.id) } ?: false
+             LaunchedEffect(currentSong?.albumId) {
             if (currentSong != null) {
                 isLoadingCover = true
                 scope.launch {
@@ -1251,7 +1451,6 @@ class MainActivity : ComponentActivity() {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                // MODIFIÉ : Card avec la vraie pochette
                 Card(
                     modifier = Modifier
                         .size(280.dp)
@@ -1322,7 +1521,8 @@ class MainActivity : ComponentActivity() {
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(text = formatDuration(currentPosition), fontSize = 12.sp)
                         Text(text = formatDuration(duration), fontSize = 12.sp)
@@ -1404,7 +1604,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // --- SHUFFLE (droite) ---
+
                     FilledTonalIconButton(
                         onClick = { musicPlayer.toggleShuffle() },
                         modifier = Modifier.size(48.dp),
@@ -1428,12 +1628,37 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                FilledTonalIconButton(
+                    onClick = {
+                        currentSong?.let { onToggleFavorite(it.id) }
+                    },
+                    modifier = Modifier.size(56.dp),
+                    enabled = currentSong != null,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = if (isFavorite)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Retirer des favoris" else "Ajouter aux favoris",
+                        modifier = Modifier.size(28.dp),
+                        tint = if (isFavorite)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             }
         }
     }
 
-    // AJOUTÉ : Fonction helper pour formater la durée (si elle n'existe pas déjà)
-    private fun formatDuration(ms: Long): String {
+     private fun formatDuration(ms: Long): String {
         val seconds = (ms / 1000) % 60
         val minutes = (ms / (1000 * 60)) % 60
         return String.format("%d:%02d", minutes, seconds)
@@ -2526,4 +2751,3 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-}
