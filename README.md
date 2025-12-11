@@ -24,10 +24,10 @@ The project is still in early development, but here’s what’s already availab
 </ul>
 
 <p>
-If you'd like to help, contributions are warmly welcome.
-
 The UI is built with Jetpack Compose for a fast and consistent experience across all devices.  
 The player runs in the background thanks to a dedicated <strong>MusicService</strong> with full notification control support.
+If you'd like to help, contributions are warmly welcome.
+
 </p>
 
 <h2>Features (EN)</h2>
@@ -95,14 +95,6 @@ Le projet est encore en développement, mais voici déjà ce qui est disponible 
 </ul>
 
 <p>
-Si vous souhaitez m’aider, toute contribution est la bienvenue.
-</p>
-
-<p>
-<img width="347" height="770" alt="image" src="https://github.com/user-attachments/assets/5c837fec-db7a-4983-aca4-2fb97c154afc" />
-</p>
-
-<p>
 L’interface, conçue avec Jetpack Compose, offre une expérience rapide et cohérente sur tous les appareils.
 Le lecteur fonctionne en arrière-plan grâce à un <strong>MusicService</strong> dédié, avec contrôle complet via la notification.
 </p>
@@ -147,3 +139,6 @@ Le lecteur fonctionne en arrière-plan grâce à un <strong>MusicService</strong
 
 <hr/>
 
+<p>
+Si vous souhaitez m’aider, toute contribution est la bienvenue.
+</p>

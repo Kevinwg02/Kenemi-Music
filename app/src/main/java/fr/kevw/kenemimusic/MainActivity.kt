@@ -45,6 +45,15 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.ui.text.style.TextAlign
 
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Image
+
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
 fun customColorScheme() = darkColorScheme(
@@ -110,8 +119,8 @@ class MainActivity : ComponentActivity() {
     private var musicService: MusicService? by mutableStateOf(null)
     private var serviceBound = false
 
-    // AJOUTÉ : Gestionnaire de playlists persistantes
     private lateinit var playlistManager: PlaylistManager
+    private lateinit var settingsManager: SettingsManager
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -137,7 +146,12 @@ class MainActivity : ComponentActivity() {
             loadFolders()
         }
     }
-
+    private fun forceScanMusic() {
+        loadSongs()
+        loadAlbums()
+        loadArtists()
+        loadFolders()
+    }
     private val requestNotificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -149,7 +163,7 @@ class MainActivity : ComponentActivity() {
 
         // AJOUTÉ : Initialiser le gestionnaire de playlists
         playlistManager = PlaylistManager(this)
-
+        settingsManager = SettingsManager(this)
         // AJOUTÉ : Charger les playlists sauvegardées
         playlists.addAll(playlistManager.loadPlaylists())
 
@@ -168,8 +182,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             val player = musicService
             val imageService = remember { ArtistImageService(this@MainActivity) }
+            val isDarkTheme = remember { mutableStateOf(settingsManager.isDarkTheme) }
 
-            MaterialTheme(colorScheme = customColorScheme()) {
+            MaterialTheme(
+                colorScheme = if (isDarkTheme.value)
+                customColorScheme()
+                else
+                    lightColorScheme(
+                        primary = Color(0xFF0070FF),
+                        surface = Color(0xFFFFFFFF),
+                        onSurface = Color(0xFF000000)
+                    )
+            ) {
                 if (player == null) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -187,8 +211,9 @@ class MainActivity : ComponentActivity() {
                         hasPermission = hasPermission,
                         imageService = imageService,
                         musicPlayer = player,
+                        isDarkThemeState = isDarkTheme,
                         onRequestPermission = { requestPermission.launch(getPermissionString()) },
-                        // MODIFIÉ : Sauvegarder lors de la création
+                        // Sauvegarder lors de la création
                         onCreatePlaylist = { name, songIds ->
                             val newPlaylist = Playlist(
                                 id = System.currentTimeMillis().toString(),
@@ -450,6 +475,7 @@ class MainActivity : ComponentActivity() {
         hasPermission: Boolean,
         musicPlayer: MusicService,
         imageService: ArtistImageService,
+        isDarkThemeState: MutableState<Boolean>,
         onRequestPermission: () -> Unit,
         onCreatePlaylist: (String, List<Long>) -> Unit,
         onDeletePlaylist: (Playlist) -> Unit,
@@ -501,17 +527,25 @@ class MainActivity : ComponentActivity() {
                         selected = selectedTab == 4,
                         onClick = { selectedTab = 4 }
                     )
+//                    NavigationBarItem(
+//                        icon = { Icon(Icons.Default.Folder, "Dossiers", Modifier.size(26.dp)) },
+//                        selected = selectedTab == 5,
+//                        onClick = { selectedTab = 5 }
+//                    )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Folder, "Dossiers", Modifier.size(26.dp)) },
-                        selected = selectedTab == 5,
-                        onClick = { selectedTab = 5 }
+                        icon = { Icon(Icons.Default.Settings, "Paramètres", Modifier.size(26.dp)) },
+                        selected = selectedTab == 6,
+                        onClick = { selectedTab = 6 }
                     )
                 }
             }
         ) { padding ->
             Box(modifier = Modifier.padding(padding)) {
                 when (selectedTab) {
-                    0 -> MusicPlayerScreen(musicPlayer = musicPlayer)
+                    0 -> MusicPlayerScreen(
+                        musicPlayer = musicPlayer,
+                        imageService = imageService
+                    )
                     1 -> SongListScreen(
                         songs = songs,
                         hasPermission = hasPermission,
@@ -523,6 +557,7 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                     2 -> {
+
                         if (selectedAlbum != null) {
                             val albumSongs = songs.filter { it.albumId == selectedAlbum!!.id }
                             AlbumDetailScreen(
@@ -540,6 +575,7 @@ class MainActivity : ComponentActivity() {
                             AlbumsScreen(
                                 albums = albums,
                                 hasPermission = hasPermission,
+                                imageService = imageService,
                                 onRequestPermission = onRequestPermission,
                                 onAlbumClick = { album -> selectedAlbum = album }
                             )
@@ -606,31 +642,39 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
-                    5 -> {
-                        if (selectedFolder != null) {
-                            val folderSongs = songs.filter { song ->
-                                val path = song.uri.path ?: ""
-                                File(path).parent == selectedFolder!!.path
-                            }
-                            FolderDetailScreen(
-                                folder = selectedFolder!!,
-                                songs = folderSongs,
-                                onBack = { selectedFolder = null },
-                                onSongClick = { song ->
-                                    musicPlayer.setPlaylist(folderSongs)
-                                    musicPlayer.playSong(song)
-                                    selectedTab = 0
-                                }
-                            )
-                        } else {
-                            FoldersScreen(
-                                folders = folders,
-                                hasPermission = hasPermission,
-                                onRequestPermission = onRequestPermission,
-                                onFolderClick = { folder -> selectedFolder = folder }
-                            )
+//                    5 -> {
+//                        if (selectedFolder != null) {
+//                            val folderSongs = songs.filter { song ->
+//                                val path = song.uri.path ?: ""
+//                                File(path).parent == selectedFolder!!.path
+//                            }
+//                            FolderDetailScreen(
+//                                folder = selectedFolder!!,
+//                                songs = folderSongs,
+//                                onBack = { selectedFolder = null },
+//                                onSongClick = { song ->
+//                                    musicPlayer.setPlaylist(folderSongs)
+//                                    musicPlayer.playSong(song)
+//                                    selectedTab = 0
+//                                }
+//                            )
+//                        } else {
+//                            FoldersScreen(
+//                                folders = folders,
+//                                hasPermission = hasPermission,
+//                                onRequestPermission = onRequestPermission,
+//                                onFolderClick = { folder -> selectedFolder = folder }
+//                            )
+//                        }
+//                    }
+                    6 -> SettingsScreen(
+                        settingsManager = settingsManager,
+                        onBack = { selectedTab = 0 },
+                        onForceScan = { forceScanMusic() },
+                        onThemeChanged = { newTheme ->
+                            isDarkThemeState.value = newTheme
                         }
-                    }
+                    )
                 }
             }
         }
@@ -1153,7 +1197,8 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun MusicPlayerScreen(
-        musicPlayer: MusicService
+        musicPlayer: MusicService,
+        imageService: ArtistImageService  // <- AJOUTER CE PARAMÈTRE
     ) {
         val currentSong = musicPlayer.currentSong
         val isPlaying = musicPlayer.isPlaying
@@ -1161,6 +1206,28 @@ class MainActivity : ComponentActivity() {
         val isShuffleEnabled = musicPlayer.isShuffleEnabled
         val songTitle = currentSong?.title ?: "Aucune chanson"
         val artistName = currentSong?.artist ?: "Sélectionnez une chanson"
+
+        // AJOUTÉ : Chargement de la pochette
+        var albumCoverUrl by remember { mutableStateOf<String?>(null) }
+        var isLoadingCover by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+        val context = LocalContext.current
+
+        // AJOUTÉ : Charger la pochette quand la chanson change
+        LaunchedEffect(currentSong?.albumId) {
+            if (currentSong != null) {
+                isLoadingCover = true
+                scope.launch {
+                    albumCoverUrl = imageService.getAlbumCoverUrl(
+                        currentSong.album,
+                        currentSong.artist
+                    )
+                    isLoadingCover = false
+                }
+            } else {
+                albumCoverUrl = null
+            }
+        }
 
         LaunchedEffect(isPlaying) {
             while (isPlaying) {
@@ -1175,9 +1242,7 @@ class MainActivity : ComponentActivity() {
             (currentPosition.toFloat() / duration.toFloat()) * 100f
         } else 0f
 
-        Scaffold(
-
-        ) { padding ->
+        Scaffold {  padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1186,23 +1251,43 @@ class MainActivity : ComponentActivity() {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
+                // MODIFIÉ : Card avec la vraie pochette
                 Card(
                     modifier = Modifier
-                        .size(280.dp)//icon musique
-                        .clip(RoundedCornerShape(36.dp)),//borderround
+                        .size(280.dp)
+                        .clip(RoundedCornerShape(36.dp)),
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-
                 ) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = "Album cover",
-                            modifier = Modifier.size(120.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        if (albumCoverUrl != null) {
+                            // Afficher la pochette de l'album
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(albumCoverUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Pochette de ${currentSong?.album}",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else if (isLoadingCover) {
+                            // Loader pendant le chargement
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(64.dp),
+                                strokeWidth = 4.dp
+                            )
+                        } else {
+                            // Icône par défaut
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = "Album cover",
+                                modifier = Modifier.size(120.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
 
@@ -1280,7 +1365,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-
                     // --- CONTROLS AU CENTRE ---
                     Row(
                         horizontalArrangement = Arrangement.Center,
@@ -1320,7 +1404,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-
                     // --- SHUFFLE (droite) ---
                     FilledTonalIconButton(
                         onClick = { musicPlayer.toggleShuffle() },
@@ -1345,14 +1428,16 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
-
-
-
-
             }
         }
     }
 
+    // AJOUTÉ : Fonction helper pour formater la durée (si elle n'existe pas déjà)
+    private fun formatDuration(ms: Long): String {
+        val seconds = (ms / 1000) % 60
+        val minutes = (ms / (1000 * 60)) % 60
+        return String.format("%d:%02d", minutes, seconds)
+    }
     @Composable
     fun SongListScreen(
         songs: List<Song>,
@@ -1501,6 +1586,7 @@ class MainActivity : ComponentActivity() {
     fun AlbumsScreen(
         albums: List<Album>,
         hasPermission: Boolean,
+        imageService: ArtistImageService,
         onRequestPermission: () -> Unit,
         onAlbumClick: (Album) -> Unit
     ) {
@@ -1568,7 +1654,8 @@ class MainActivity : ComponentActivity() {
                     items(albums) { album ->
                         AlbumItem(
                             album = album,
-                            onClick = { onAlbumClick(album) }
+                            onClick = { onAlbumClick(album) },
+                            imageService = imageService
                         )
                         HorizontalDivider()
                     }
@@ -1620,7 +1707,23 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun AlbumItem(album: Album, onClick: () -> Unit) {
+    fun AlbumItem(
+        album: Album,
+        onClick: () -> Unit,
+        imageService: ArtistImageService
+    ) {
+        var albumCoverUrl by remember { mutableStateOf<String?>(null) }
+        var isLoading by remember { mutableStateOf(true) }
+        val scope = rememberCoroutineScope()
+        val context = LocalContext.current
+
+        LaunchedEffect(album.id) {
+            scope.launch {
+                albumCoverUrl = imageService.getAlbumCoverUrl(album.name, album.artist)
+                isLoading = false
+            }
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1638,12 +1741,29 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Album,
-                        contentDescription = null,
-                        modifier = Modifier.size(32.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    if (albumCoverUrl != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(albumCoverUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "Pochette de ${album.name}",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Album,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
 
@@ -1673,11 +1793,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    fun formatDuration(ms: Long): String {
-        val seconds = (ms / 1000) % 60
-        val minutes = (ms / (1000 * 60)) % 60
-        return String.format("%d:%02d", minutes, seconds)
-    }
 
     @Composable
     fun ArtistsScreen(
