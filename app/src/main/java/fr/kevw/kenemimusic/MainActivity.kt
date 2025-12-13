@@ -1519,6 +1519,57 @@ class MainActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(2.dp))
 
                 Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+
+                        // --- BOUTON LISTE DE LECTURE (GAUCHE) ---
+                        FilledTonalIconButton(
+                            onClick = {
+                                // TODO : ouvrir la playlist / bottom sheet
+                            },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.QueueMusic,
+                                contentDescription = "Liste de lecture"
+                            )
+                        }
+
+                        // --- BOUTON FAVORI (DROITE) ---
+                        FilledTonalIconButton(
+                            onClick = {
+                                currentSong?.let { onToggleFavorite(it.id) }
+                            },
+                            modifier = Modifier.size(40.dp),
+                            enabled = currentSong != null,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = if (isFavorite)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Icon(
+                                imageVector = if (isFavorite)
+                                    Icons.Default.Favorite
+                                else
+                                    Icons.Default.FavoriteBorder,
+                                contentDescription = if (isFavorite)
+                                    "Retirer des favoris"
+                                else
+                                    "Ajouter aux favoris",
+                                tint = if (isFavorite)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     Slider(
                         value = progress, onValueChange = { newProgress ->
                             val newPosition = ((newProgress / 100f) * duration).toLong()
@@ -1634,25 +1685,6 @@ class MainActivity : ComponentActivity() {
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                FilledTonalIconButton(
-                    onClick = {
-                        currentSong?.let { onToggleFavorite(it.id) }
-                    },
-                    modifier = Modifier.size(56.dp),
-                    enabled = currentSong != null,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = if (isFavorite) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = if (isFavorite) "Retirer des favoris" else "Ajouter aux favoris",
-                        modifier = Modifier.size(28.dp),
-                        tint = if (isFavorite) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
         }
     }
@@ -1695,6 +1727,37 @@ fun SongListScreen(
     val currentSong = musicPlayer.currentSong
     val isPlaying = musicPlayer.isPlaying
 
+    // AJOUTÉ : Scroll automatique vers la chanson en cours au premier affichage
+    var hasScrolledToCurrentSong by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentSong, filteredSongs) {
+        if (currentSong != null && !hasScrolledToCurrentSong && filteredSongs.isNotEmpty()) {
+            val currentSongIndex = filteredSongs.indexOfFirst { it.id == currentSong.id }
+            if (currentSongIndex >= 0) {
+                // Calculer l'index réel en tenant compte des headers
+                var scrollIndex = 0
+                for ((letter, songsInGroup) in groupedSongs) {
+                    val indexInGroup = songsInGroup.indexOfFirst { it.id == currentSong.id }
+                    if (indexInGroup >= 0) {
+                        scrollIndex += indexInGroup + 1 // +1 pour le header
+                        break
+                    }
+                    scrollIndex += songsInGroup.size + 1 // +1 pour le header
+                }
+
+                // Scroll avec un petit délai pour s'assurer que la liste est prête
+                delay(100)
+                listState.animateScrollToItem(scrollIndex.coerceAtLeast(0))
+                hasScrolledToCurrentSong = true
+            }
+        }
+    }
+
+    // AJOUTÉ : Réinitialiser le flag quand on change d'onglet
+    LaunchedEffect(Unit) {
+        hasScrolledToCurrentSong = false
+    }
+
     Scaffold(
         topBar = {
             if (hasPermission && songs.isNotEmpty()) {
@@ -1729,7 +1792,6 @@ fun SongListScreen(
             }
         }
     ) { padding ->
-        // ⬇️ AJOUTÉ : Message si pas de permission
         if (!hasPermission) {
             PermissionRequiredMessage(
                 icon = Icons.Default.MusicNote,
@@ -1901,7 +1963,7 @@ fun AlbumsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    .padding(horizontal = 6.dp, vertical = 8.dp)
                             )
                         }
 
@@ -1935,7 +1997,7 @@ fun AlbumsScreen(
                     },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(vertical = 16.dp)
+                        .padding(vertical = 21.dp)
                 )
             }
         }

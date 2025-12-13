@@ -40,7 +40,7 @@ class MusicService : Service() {
     private lateinit var audioManager: AudioManager
     private var audioFocusRequest: AudioFocusRequest? = null
 
-    // AJOUTÉ : Pour éviter la reprise automatique
+    // Pour éviter la reprise automatique
     private var wasPlayingBeforeFocusLoss = false
 
     companion object {

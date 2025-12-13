@@ -457,7 +457,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Version", fontWeight = FontWeight.Medium)
                         Text(
-                            text = "13.12.2024",
+                            text = "25.12.13",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
