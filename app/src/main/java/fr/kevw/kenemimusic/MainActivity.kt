@@ -1,4 +1,5 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
+
 package fr.kevw.kenemimusic
 
 
@@ -37,23 +38,23 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import androidx.compose.foundation.background
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.ui.text.style.TextAlign
 
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Image
+import androidx.compose.foundation.lazy.rememberLazyListState
+
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.background
+import androidx.compose.material3.Surface
+import kotlin.random.Random
 
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
@@ -78,18 +79,11 @@ data class Song(
 )
 
 data class Album(
-    val id: Long,
-    val name: String,
-    val artist: String,
-    val songCount: Int,
-    val artUri: Uri?
+    val id: Long, val name: String, val artist: String, val songCount: Int, val artUri: Uri?
 )
 
 data class Artist(
-    val id: Long,
-    val name: String,
-    val albumCount: Int,
-    val songCount: Int
+    val id: Long, val name: String, val albumCount: Int, val songCount: Int
 )
 
 data class Playlist(
@@ -100,9 +94,7 @@ data class Playlist(
 )
 
 data class MusicFolder(
-    val path: String,
-    val name: String,
-    val songCount: Int
+    val path: String, val name: String, val songCount: Int
 )
 
 enum class RepeatMode {
@@ -147,12 +139,14 @@ class MainActivity : ComponentActivity() {
             loadFolders()
         }
     }
+
     private fun forceScanMusic() {
         loadSongs()
         loadAlbums()
         loadArtists()
         loadFolders()
     }
+
     private val requestNotificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -185,19 +179,16 @@ class MainActivity : ComponentActivity() {
             val isDarkTheme = remember { mutableStateOf(settingsManager.isDarkTheme) }
 
             MaterialTheme(
-                colorScheme = if (isDarkTheme.value)
-                customColorScheme()
-                else
-                    lightColorScheme(
-                        primary = Color(0xFF0070FF),
-                        surface = Color(0xFFFFFFFF),
-                        onSurface = Color(0xFF000000)
-                    )
+                colorScheme = if (isDarkTheme.value) customColorScheme()
+                else lightColorScheme(
+                    primary = Color(0xFF0070FF),
+                    surface = Color(0xFFFFFFFF),
+                    onSurface = Color(0xFF000000)
+                )
             ) {
                 if (player == null) {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator()
                     }
@@ -226,37 +217,34 @@ class MainActivity : ComponentActivity() {
                             playlists.add(newPlaylist)
                             playlistManager.addPlaylist(newPlaylist)
                         },
-                        // MODIFIÉ : Sauvegarder lors de la suppression
+                        // Sauvegarder lors de la suppression
                         onDeletePlaylist = { playlist ->
                             playlists.remove(playlist)
                             playlistManager.deletePlaylist(playlist.id)
                         },
-                        // MODIFIÉ : Sauvegarder lors de la mise à jour
+                        //  Sauvegarder lors de la mise à jour
                         onUpdatePlaylist = { playlistId, newName, newSongIds ->
                             val index = playlists.indexOfFirst { it.id == playlistId }
                             if (index != -1) {
                                 playlists[index] = playlists[index].copy(
-                                    name = newName,
-                                    songIds = newSongIds
+                                    name = newName, songIds = newSongIds
                                 )
                                 playlistManager.updatePlaylist(playlistId, newName, newSongIds)
                             }
                         },
-                                onToggleFavorite = { songId ->
+                        onToggleFavorite = { songId ->
                             val isFavorite = playlistManager.toggleFavorite(songId)
                             if (isFavorite) {
                                 favorites.add(songId)
                             } else {
                                 favorites.remove(songId)
                             }
-                        }
-                    )
+                        })
                 }
             }
         }
 
     }
-
 
 
     private fun getPermissionString(): String {
@@ -269,8 +257,7 @@ class MainActivity : ComponentActivity() {
 
     private fun checkPermission() {
         hasPermission = ContextCompat.checkSelfPermission(
-            this,
-            getPermissionString()
+            this, getPermissionString()
         ) == PackageManager.PERMISSION_GRANTED
 
         if (hasPermission) {
@@ -302,11 +289,7 @@ class MainActivity : ComponentActivity() {
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
 
         contentResolver.query(
-            collection,
-            projection,
-            selection,
-            null,
-            "${MediaStore.Audio.Media.TITLE} ASC"
+            collection, projection, selection, null, "${MediaStore.Audio.Media.TITLE} ASC"
         )?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
             val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
@@ -329,8 +312,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val uri = ContentUris.withAppendedId(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    id
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id
                 )
 
                 // VÉRIFICATION 2 : Vérifier si le fichier est accessible
@@ -373,11 +355,7 @@ class MainActivity : ComponentActivity() {
         )
 
         contentResolver.query(
-            collection,
-            projection,
-            null,
-            null,
-            "${MediaStore.Audio.Albums.ALBUM} ASC"
+            collection, projection, null, null, "${MediaStore.Audio.Albums.ALBUM} ASC"
         )?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums._ID)
             val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.ALBUM)
@@ -391,11 +369,11 @@ class MainActivity : ComponentActivity() {
                 val count = cursor.getInt(countColumn)
 
                 val artUri = ContentUris.withAppendedId(
-                    Uri.parse("content://media/external/audio/albumart"),
-                    id
+                    Uri.parse("content://media/external/audio/albumart"), id
                 )
 
-                albumMap[id] = Album(id, album ?: "Album inconnu", artist ?: "Artiste inconnu", count, artUri)
+                albumMap[id] =
+                    Album(id, album ?: "Album inconnu", artist ?: "Artiste inconnu", count, artUri)
             }
         }
 
@@ -416,16 +394,14 @@ class MainActivity : ComponentActivity() {
         )
 
         contentResolver.query(
-            collection,
-            projection,
-            null,
-            null,
-            "${MediaStore.Audio.Artists.ARTIST} ASC"
+            collection, projection, null, null, "${MediaStore.Audio.Artists.ARTIST} ASC"
         )?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists._ID)
             val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.ARTIST)
-            val albumCountColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_ALBUMS)
-            val trackCountColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_TRACKS)
+            val albumCountColumn =
+                cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_ALBUMS)
+            val trackCountColumn =
+                cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_TRACKS)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
@@ -467,9 +443,7 @@ class MainActivity : ComponentActivity() {
         // Créer la liste des dossiers
         val folderList = folderMap.map { (path, songs) ->
             MusicFolder(
-                path = path,
-                name = File(path).name,
-                songCount = songs.size
+                path = path, name = File(path).name, songCount = songs.size
             )
         }.sortedBy { it.name }
 
@@ -511,8 +485,7 @@ class MainActivity : ComponentActivity() {
         }
 
         Scaffold(
-            containerColor = MaterialTheme.colorScheme.surface,
-            bottomBar = {
+            containerColor = MaterialTheme.colorScheme.surface, bottomBar = {
                 NavigationBar(
                     containerColor = Color(0xFF000000).copy(alpha = 0.85f),
                     modifier = Modifier.height(40.dp)
@@ -520,28 +493,24 @@ class MainActivity : ComponentActivity() {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.PlayArrow, "Lecteur", Modifier.size(26.dp)) },
                         selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 }
-                    )
+                        onClick = { selectedTab = 0 })
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.MusicNote, "Chansons", Modifier.size(26.dp)) },
                         selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 }
-                    )
+                        onClick = { selectedTab = 1 })
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Album, "Albums", Modifier.size(26.dp)) },
                         selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 }
-                    )
+                        onClick = { selectedTab = 2 })
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Person, "Artistes", Modifier.size(26.dp)) },
                         selected = selectedTab == 3,
-                        onClick = { selectedTab = 3 }
-                    )
-                    NavigationBarItem(
-                        icon = { Icon(Icons.Default.QueueMusic, "Playlists", Modifier.size(26.dp)) },
-                        selected = selectedTab == 4,
-                        onClick = { selectedTab = 4 }
-                    )
+                        onClick = { selectedTab = 3 })
+                    NavigationBarItem(icon = {
+                        Icon(
+                            Icons.Default.QueueMusic, "Playlists", Modifier.size(26.dp)
+                        )
+                    }, selected = selectedTab == 4, onClick = { selectedTab = 4 })
 //                    NavigationBarItem(
 //                        icon = { Icon(Icons.Default.Folder, "Dossiers", Modifier.size(26.dp)) },
 //                        selected = selectedTab == 5,
@@ -550,11 +519,9 @@ class MainActivity : ComponentActivity() {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Settings, "Paramètres", Modifier.size(26.dp)) },
                         selected = selectedTab == 6,
-                        onClick = { selectedTab = 6 }
-                    )
+                        onClick = { selectedTab = 6 })
                 }
-            }
-        ) { padding ->
+            }) { padding ->
             Box(modifier = Modifier.padding(padding)) {
                 when (selectedTab) {
                     0 -> MusicPlayerScreen(
@@ -563,16 +530,18 @@ class MainActivity : ComponentActivity() {
                         favorites = favorites,
                         onToggleFavorite = onToggleFavorite
                     )
+
                     1 -> SongListScreen(
                         songs = songs,
                         hasPermission = hasPermission,
                         onRequestPermission = onRequestPermission,
+                        musicPlayer = musicPlayer,
                         onSongClick = { song ->
                             musicPlayer.setPlaylist(songs)
                             musicPlayer.playSong(song)
                             selectedTab = 0
-                        }
-                    )
+                        })
+
                     2 -> {
 
                         if (selectedAlbum != null) {
@@ -582,22 +551,22 @@ class MainActivity : ComponentActivity() {
                                 songs = albumSongs,
                                 onBack = { selectedAlbum = null },
                                 imageService = imageService,
+                                musicPlayer = musicPlayer,
                                 onSongClick = { song ->
                                     musicPlayer.setPlaylist(albumSongs)
                                     musicPlayer.playSong(song)
                                     selectedTab = 0
-                                }
-                            )
+                                })
                         } else {
                             AlbumsScreen(
                                 albums = albums,
                                 hasPermission = hasPermission,
                                 imageService = imageService,
                                 onRequestPermission = onRequestPermission,
-                                onAlbumClick = { album -> selectedAlbum = album }
-                            )
+                                onAlbumClick = { album -> selectedAlbum = album })
                         }
                     }
+
                     3 -> {
                         if (selectedArtist != null) {
                             val artistSongs = songs.filter { it.artist == selectedArtist!!.name }
@@ -606,31 +575,32 @@ class MainActivity : ComponentActivity() {
                                 artist = selectedArtist!!,
                                 songs = artistSongs,
                                 imageService = imageService,
+                                musicPlayer = musicPlayer,
                                 onBack = { selectedArtist = null },
                                 onSongClick = { song ->
                                     musicPlayer.setPlaylist(artistSongs)
                                     musicPlayer.playSong(song)
                                     selectedTab = 0
-                                }
-                            )
+                                })
                         } else {
                             ArtistsScreen(
                                 artists = artists,
                                 hasPermission = hasPermission,
                                 imageService = imageService,
                                 onRequestPermission = onRequestPermission,
-                                onArtistClick = { artist -> selectedArtist = artist }
-                            )
+                                onArtistClick = { artist -> selectedArtist = artist })
                         }
                     }
 
                     4 -> {
                         if (selectedPlaylist != null) {
-                            val playlistSongs = songs.filter { song -> selectedPlaylist!!.songIds.contains(song.id) }
+                            val playlistSongs =
+                                songs.filter { song -> selectedPlaylist!!.songIds.contains(song.id) }
                             PlaylistDetailScreen(
                                 playlist = selectedPlaylist!!,
                                 songs = playlistSongs,
                                 allSongs = songs,
+                                musicPlayer = musicPlayer,
                                 onBack = { selectedPlaylist = null },
                                 onSongClick = { song ->
                                     musicPlayer.setPlaylist(playlistSongs)
@@ -643,9 +613,10 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onUpdatePlaylist = { newName, newSongIds ->
                                     onUpdatePlaylist(selectedPlaylist!!.id, newName, newSongIds)
-                                    selectedPlaylist = selectedPlaylist!!.copy(name = newName, songIds = newSongIds)
-                                }
-                            )
+                                    selectedPlaylist = selectedPlaylist!!.copy(
+                                        name = newName, songIds = newSongIds
+                                    )
+                                })
                         } else {
                             PlaylistsScreen(
                                 playlists = playlists,
@@ -691,12 +662,12 @@ class MainActivity : ComponentActivity() {
                         onForceScan = { forceScanMusic() },
                         onThemeChanged = { newTheme ->
                             isDarkThemeState.value = newTheme
-                        }
-                    )
+                        })
                 }
             }
         }
     }
+
     @Composable
     fun PlaylistsScreen(
         playlists: List<Playlist>,
@@ -715,50 +686,45 @@ class MainActivity : ComponentActivity() {
             songs.filter { favorites.contains(it.id) }
         }
 
-        Scaffold(
-            topBar = {
-                Column {
-                    TabRow(
-                        selectedTabIndex = selectedTabIndex,
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ) {
-                        Tab(
-                            selected = selectedTabIndex == 0,
-                            onClick = { selectedTabIndex = 0 },
-                            text = { Text("Favoris") },
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Default.Favorite,
-                                    contentDescription = "Favoris"
-                                )
-                            }
-                        )
-                        Tab(
-                            selected = selectedTabIndex == 1,
-                            onClick = { selectedTabIndex = 1 },
-                            text = { Text("Playlists") },
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Default.QueueMusic,
-                                    contentDescription = "Playlists"
-                                )
-                            }
-                        )
-                    }
-                }
-            },
-            floatingActionButton = {
-                // Bouton FAB uniquement sur l'onglet Playlists
-                if (selectedTabIndex == 1 && hasPermission) {
-                    FloatingActionButton(
-                        onClick = { showCreateDialog = true },
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Créer une playlist")
-                    }
+        Scaffold(topBar = {
+            Column {
+                TabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    containerColor = MaterialTheme.colorScheme.surface
+                ) {
+                    Tab(
+                        selected = selectedTabIndex == 0,
+                        onClick = { selectedTabIndex = 0 },
+                        text = { Text("Favoris") },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.Favorite,
+                                contentDescription = "Favoris"
+                            )
+                        })
+                    Tab(
+                        selected = selectedTabIndex == 1,
+                        onClick = { selectedTabIndex = 1 },
+                        text = { Text("Playlists") },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.QueueMusic,
+                                contentDescription = "Playlists"
+                            )
+                        })
                 }
             }
-        ) { padding ->
+        }, floatingActionButton = {
+            // Bouton FAB uniquement sur l'onglet Playlists
+            if (selectedTabIndex == 1 && hasPermission) {
+                FloatingActionButton(
+                    onClick = { showCreateDialog = true },
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Créer une playlist")
+                }
+            }
+        }) { padding ->
             if (!hasPermission) {
                 Box(
                     modifier = Modifier
@@ -778,9 +744,7 @@ class MainActivity : ComponentActivity() {
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            "Permission nécessaire",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
+                            "Permission nécessaire", fontSize = 20.sp, fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
@@ -861,20 +825,17 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 items(favoriteSongs) { song ->
-                                    FavoriteSongItem(
-                                        song = song,
-                                        onSongClick = { song ->
-                                            // Jouer directement la chanson
-                                        },
-                                        onRemoveFavorite = {
-                                            onToggleFavorite(song.id)
-                                        }
-                                    )
+                                    FavoriteSongItem(song = song, onSongClick = { song ->
+                                        // Jouer directement la chanson
+                                    }, onRemoveFavorite = {
+                                        onToggleFavorite(song.id)
+                                    })
                                     HorizontalDivider()
                                 }
                             }
                         }
                     }
+
                     1 -> {
                         // ONGLET PLAYLISTS (code existant)
                         if (playlists.isEmpty()) {
@@ -895,7 +856,11 @@ class MainActivity : ComponentActivity() {
                                     Text("Aucune playlist")
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Button(onClick = { showCreateDialog = true }) {
-                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Icon(
+                                            Icons.Default.Add,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text("Créer une playlist")
                                     }
@@ -911,8 +876,7 @@ class MainActivity : ComponentActivity() {
                                     PlaylistItem(
                                         playlist = playlist,
                                         songCount = playlist.songIds.size,
-                                        onClick = { onPlaylistClick(playlist) }
-                                    )
+                                        onClick = { onPlaylistClick(playlist) })
                                     HorizontalDivider()
                                 }
                             }
@@ -929,22 +893,19 @@ class MainActivity : ComponentActivity() {
                 onCreate = { name, songIds ->
                     onCreatePlaylist(name, songIds)
                     showCreateDialog = false
-                }
-            )
+                })
         }
     }
+
     @Composable
     fun FavoriteSongItem(
-        song: Song,
-        onSongClick: (Song) -> Unit,
-        onRemoveFavorite: () -> Unit
+        song: Song, onSongClick: (Song) -> Unit, onRemoveFavorite: () -> Unit
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = { onSongClick(song) })
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp), verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Default.MusicNote,
@@ -982,11 +943,10 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
     @Composable
     fun PlaylistItem(
-        playlist: Playlist,
-        songCount: Int,
-        onClick: () -> Unit
+        playlist: Playlist, songCount: Int, onClick: () -> Unit
     ) {
         Row(
             modifier = Modifier
@@ -1002,8 +962,7 @@ class MainActivity : ComponentActivity() {
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.QueueMusic,
@@ -1034,11 +993,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+
     @Composable
     fun PlaylistDetailScreen(
         playlist: Playlist,
         songs: List<Song>,
         allSongs: List<Song>,
+        musicPlayer: MusicService,
         onBack: () -> Unit,
         onSongClick: (Song) -> Unit,
         onDeletePlaylist: () -> Unit,
@@ -1046,6 +1007,9 @@ class MainActivity : ComponentActivity() {
     ) {
         var showDeleteDialog by remember { mutableStateOf(false) }
         var showEditDialog by remember { mutableStateOf(false) }
+
+        val currentSong = musicPlayer.currentSong // AJOUTÉ
+        val isPlaying = musicPlayer.isPlaying // AJOUTÉ
 
         Scaffold(
             topBar = {
@@ -1128,8 +1092,7 @@ class MainActivity : ComponentActivity() {
                 // Liste des chansons
                 if (songs.isEmpty()) {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
                     ) {
                         Text(
                             "Aucune chanson dans cette playlist",
@@ -1139,50 +1102,52 @@ class MainActivity : ComponentActivity() {
                 } else {
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         items(songs) { song ->
-                            SongItem(song = song, onClick = { onSongClick(song) })
+                            SongItem(
+                                song = song,
+                                onClick = { onSongClick(song) },
+                                isPlaying = isPlaying,
+                                isCurrentSong = currentSong?.id == song.id // AJOUTÉ
+                            )
                             HorizontalDivider()
                         }
                     }
                 }
             }
-        }
 
-        if (showDeleteDialog) {
-            AlertDialog(
-                onDismissRequest = { showDeleteDialog = false },
-                title = { Text("Supprimer la playlist ?") },
-                text = { Text("Cette action est irréversible.") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            onDeletePlaylist()
-                            showDeleteDialog = false
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text("Supprimer")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteDialog = false }) {
-                        Text("Annuler")
-                    }
-                }
-            )
-        }
+            if (showDeleteDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteDialog = false },
+                    title = { Text("Supprimer la playlist ?") },
+                    text = { Text("Cette action est irréversible.") },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                onDeletePlaylist()
+                                showDeleteDialog = false
+                            }, colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("Supprimer")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteDialog = false }) {
+                            Text("Annuler")
+                        }
+                    })
+            }
 
-        if (showEditDialog) {
-            EditPlaylistDialog(
-                playlist = playlist,
-                allSongs = allSongs,
-                onDismiss = { showEditDialog = false },
-                onUpdate = { newName, newSongIds ->
-                    onUpdatePlaylist(newName, newSongIds)
-                    showEditDialog = false
-                }
-            )
+            if (showEditDialog) {
+                EditPlaylistDialog(
+                    playlist = playlist,
+                    allSongs = allSongs,
+                    onDismiss = { showEditDialog = false },
+                    onUpdate = { newName, newSongIds ->
+                        onUpdatePlaylist(newName, newSongIds)
+                        showEditDialog = false
+                    })
+            }
         }
     }
 
@@ -1197,47 +1162,43 @@ class MainActivity : ComponentActivity() {
         var selectedSongs by remember { mutableStateOf(playlist.songIds.toSet()) }
         var showSongSelector by remember { mutableStateOf(false) }
 
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("Modifier la playlist") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = playlistName,
-                        onValueChange = { playlistName = it },
-                        label = { Text("Nom de la playlist") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedButton(
-                        onClick = { showSongSelector = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Modifier les chansons (${selectedSongs.size})")
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (playlistName.isNotBlank()) {
-                            onUpdate(playlistName, selectedSongs.toList())
-                        }
-                    },
-                    enabled = playlistName.isNotBlank()
+        AlertDialog(onDismissRequest = onDismiss, title = { Text("Modifier la playlist") }, text = {
+            Column {
+                OutlinedTextField(
+                    value = playlistName,
+                    onValueChange = { playlistName = it },
+                    label = { Text("Nom de la playlist") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = { showSongSelector = true }, modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Enregistrer")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismiss) {
-                    Text("Annuler")
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Modifier les chansons (${selectedSongs.size})")
                 }
             }
-        )
+        }, confirmButton = {
+            Button(
+                onClick = {
+                    if (playlistName.isNotBlank()) {
+                        onUpdate(playlistName, selectedSongs.toList())
+                    }
+                }, enabled = playlistName.isNotBlank()
+            ) {
+                Text("Enregistrer")
+            }
+        }, dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annuler")
+            }
+        })
 
         if (showSongSelector) {
             AlertDialog(
@@ -1246,19 +1207,16 @@ class MainActivity : ComponentActivity() {
                 text = {
                     LazyColumn(modifier = Modifier.height(400.dp)) {
                         items(allSongs) { song ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedSongs = if (selectedSongs.contains(song.id)) {
-                                            selectedSongs - song.id
-                                        } else {
-                                            selectedSongs + song.id
-                                        }
+                            Row(modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedSongs = if (selectedSongs.contains(song.id)) {
+                                        selectedSongs - song.id
+                                    } else {
+                                        selectedSongs + song.id
                                     }
-                                    .padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                                }
+                                .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
                                     checked = selectedSongs.contains(song.id),
                                     onCheckedChange = null
@@ -1286,60 +1244,49 @@ class MainActivity : ComponentActivity() {
                     Button(onClick = { showSongSelector = false }) {
                         Text("OK")
                     }
-                }
-            )
+                })
         }
     }
 
     @Composable
     fun CreatePlaylistDialog(
-        songs: List<Song>,
-        onDismiss: () -> Unit,
-        onCreate: (String, List<Long>) -> Unit
+        songs: List<Song>, onDismiss: () -> Unit, onCreate: (String, List<Long>) -> Unit
     ) {
         var playlistName by remember { mutableStateOf("") }
         var selectedSongs by remember { mutableStateOf(setOf<Long>()) }
         var showSongSelector by remember { mutableStateOf(false) }
 
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("Nouvelle playlist") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = playlistName,
-                        onValueChange = { playlistName = it },
-                        label = { Text("Nom de la playlist") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedButton(
-                        onClick = { showSongSelector = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Sélectionner les chansons (${selectedSongs.size})")
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (playlistName.isNotBlank()) {
-                            onCreate(playlistName, selectedSongs.toList())
-                        }
-                    },
-                    enabled = playlistName.isNotBlank()
+        AlertDialog(onDismissRequest = onDismiss, title = { Text("Nouvelle playlist") }, text = {
+            Column {
+                OutlinedTextField(
+                    value = playlistName,
+                    onValueChange = { playlistName = it },
+                    label = { Text("Nom de la playlist") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = { showSongSelector = true }, modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Créer")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismiss) {
-                    Text("Annuler")
+                    Text("Sélectionner les chansons (${selectedSongs.size})")
                 }
             }
-        )
+        }, confirmButton = {
+            Button(
+                onClick = {
+                    if (playlistName.isNotBlank()) {
+                        onCreate(playlistName, selectedSongs.toList())
+                    }
+                }, enabled = playlistName.isNotBlank()
+            ) {
+                Text("Créer")
+            }
+        }, dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annuler")
+            }
+        })
 
         if (showSongSelector) {
             AlertDialog(
@@ -1348,19 +1295,16 @@ class MainActivity : ComponentActivity() {
                 text = {
                     LazyColumn(modifier = Modifier.height(400.dp)) {
                         items(songs) { song ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedSongs = if (selectedSongs.contains(song.id)) {
-                                            selectedSongs - song.id
-                                        } else {
-                                            selectedSongs + song.id
-                                        }
+                            Row(modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedSongs = if (selectedSongs.contains(song.id)) {
+                                        selectedSongs - song.id
+                                    } else {
+                                        selectedSongs + song.id
                                     }
-                                    .padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                                }
+                                .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
                                     checked = selectedSongs.contains(song.id),
                                     onCheckedChange = null
@@ -1388,8 +1332,7 @@ class MainActivity : ComponentActivity() {
                     Button(onClick = { showSongSelector = false }) {
                         Text("OK")
                     }
-                }
-            )
+                })
         }
     }
 
@@ -1414,13 +1357,12 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
         val isFavorite = currentSong?.let { favorites.contains(it.id) } ?: false
-             LaunchedEffect(currentSong?.albumId) {
+        LaunchedEffect(currentSong?.albumId) {
             if (currentSong != null) {
                 isLoadingCover = true
                 scope.launch {
                     albumCoverUrl = imageService.getAlbumCoverUrl(
-                        currentSong.album,
-                        currentSong.artist
+                        currentSong.album, currentSong.artist
                     )
                     isLoadingCover = false
                 }
@@ -1442,7 +1384,7 @@ class MainActivity : ComponentActivity() {
             (currentPosition.toFloat() / duration.toFloat()) * 100f
         } else 0f
 
-        Scaffold {  padding ->
+        Scaffold { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1458,16 +1400,13 @@ class MainActivity : ComponentActivity() {
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
                     ) {
                         if (albumCoverUrl != null) {
                             // Afficher la pochette de l'album
                             AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(albumCoverUrl)
-                                    .crossfade(true)
-                                    .build(),
+                                model = ImageRequest.Builder(context).data(albumCoverUrl)
+                                    .crossfade(true).build(),
                                 contentDescription = "Pochette de ${currentSong?.album}",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
@@ -1475,8 +1414,7 @@ class MainActivity : ComponentActivity() {
                         } else if (isLoadingCover) {
                             // Loader pendant le chargement
                             CircularProgressIndicator(
-                                modifier = Modifier.size(64.dp),
-                                strokeWidth = 4.dp
+                                modifier = Modifier.size(64.dp), strokeWidth = 4.dp
                             )
                         } else {
                             // Icône par défaut
@@ -1510,13 +1448,10 @@ class MainActivity : ComponentActivity() {
 
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Slider(
-                        value = progress,
-                        onValueChange = { newProgress ->
+                        value = progress, onValueChange = { newProgress ->
                             val newPosition = ((newProgress / 100f) * duration).toLong()
                             musicPlayer.seekTo(newPosition)
-                        },
-                        valueRange = 0f..100f,
-                        modifier = Modifier.fillMaxWidth()
+                        }, valueRange = 0f..100f, modifier = Modifier.fillMaxWidth()
                     )
 
                     Row(
@@ -1541,10 +1476,8 @@ class MainActivity : ComponentActivity() {
                         onClick = { musicPlayer.toggleRepeatMode() },
                         modifier = Modifier.size(48.dp),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = if (repeatMode != RepeatMode.OFF)
-                                MaterialTheme.colorScheme.primaryContainer
-                            else
-                                MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = if (repeatMode != RepeatMode.OFF) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant
                         )
                     ) {
                         Icon(
@@ -1558,10 +1491,8 @@ class MainActivity : ComponentActivity() {
                                 RepeatMode.ONE -> "Répéter cette chanson"
                                 RepeatMode.ALL -> "Répéter toute la playlist"
                             },
-                            tint = if (repeatMode != RepeatMode.OFF)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (repeatMode != RepeatMode.OFF) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -1575,7 +1506,11 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.size(64.dp),
                             enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL
                         ) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Précédent", modifier = Modifier.size(32.dp))
+                            Icon(
+                                Icons.Default.SkipPrevious,
+                                contentDescription = "Précédent",
+                                modifier = Modifier.size(32.dp)
+                            )
                         }
 
                         Spacer(modifier = Modifier.width(16.dp))
@@ -1583,8 +1518,7 @@ class MainActivity : ComponentActivity() {
                         FloatingActionButton(
                             onClick = {
                                 if (isPlaying) musicPlayer.pause() else musicPlayer.resume()
-                            },
-                            modifier = Modifier.size(72.dp)
+                            }, modifier = Modifier.size(72.dp)
                         ) {
                             Icon(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -1600,7 +1534,11 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.size(64.dp),
                             enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL
                         ) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Suivant", modifier = Modifier.size(32.dp))
+                            Icon(
+                                Icons.Default.SkipNext,
+                                contentDescription = "Suivant",
+                                modifier = Modifier.size(32.dp)
+                            )
                         }
                     }
 
@@ -1609,22 +1547,16 @@ class MainActivity : ComponentActivity() {
                         onClick = { musicPlayer.toggleShuffle() },
                         modifier = Modifier.size(48.dp),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = if (isShuffleEnabled)
-                                MaterialTheme.colorScheme.primaryContainer
-                            else
-                                MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = if (isShuffleEnabled) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant
                         )
                     ) {
                         Icon(
                             imageVector = Icons.Default.Shuffle,
-                            contentDescription = if (isShuffleEnabled)
-                                "Mode aléatoire activé"
-                            else
-                                "Mode aléatoire désactivé",
-                            tint = if (isShuffleEnabled)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                            contentDescription = if (isShuffleEnabled) "Mode aléatoire activé"
+                            else "Mode aléatoire désactivé",
+                            tint = if (isShuffleEnabled) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -1637,1117 +1569,1204 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.size(56.dp),
                     enabled = currentSong != null,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = if (isFavorite)
-                            MaterialTheme.colorScheme.primaryContainer
-                        else
-                            MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = if (isFavorite) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceVariant
                     )
                 ) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = if (isFavorite) "Retirer des favoris" else "Ajouter aux favoris",
                         modifier = Modifier.size(28.dp),
-                        tint = if (isFavorite)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (isFavorite) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
+        }
+    }
+}
+
+private fun formatDuration(ms: Long): String {
+    val seconds = (ms / 1000) % 60
+    val minutes = (ms / (1000 * 60)) % 60
+    return String.format("%d:%02d", minutes, seconds)
+}
+
+@Composable
+fun SongListScreen(
+    songs: List<Song>,
+    hasPermission: Boolean,
+    musicPlayer: MusicService, // AJOUTÉ
+    onRequestPermission: () -> Unit,
+    onSongClick: (Song) -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredSongs = remember(songs, searchQuery) {
+        if (searchQuery.isBlank()) {
+            songs
+        } else {
+            songs.filter { song ->
+                song.title.contains(searchQuery, ignoreCase = true) ||
+                        song.artist.contains(searchQuery, ignoreCase = true) ||
+                        song.album.contains(searchQuery, ignoreCase = true)
             }
         }
     }
 
-     private fun formatDuration(ms: Long): String {
-        val seconds = (ms / 1000) % 60
-        val minutes = (ms / (1000 * 60)) % 60
-        return String.format("%d:%02d", minutes, seconds)
-    }
-    @Composable
-    fun SongListScreen(
-        songs: List<Song>,
-        hasPermission: Boolean,
-        onRequestPermission: () -> Unit,
-        onSongClick: (Song) -> Unit
-    ) {
-        var searchQuery by remember { mutableStateOf("") }
-        val filteredSongs = remember(songs, searchQuery) {
-            if (searchQuery.isBlank()) {
-                songs
-            } else {
-                songs.filter { song ->
-                    song.title.contains(searchQuery, ignoreCase = true) ||
-                            song.artist.contains(searchQuery, ignoreCase = true) ||
-                            song.album.contains(searchQuery, ignoreCase = true)
-                }
-            }
-        }
+    // État pour le scroll et alphabet
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val alphabet = remember { generateAlphabet() }
 
-        Scaffold(
-            topBar = {
-                if (hasPermission && songs.isNotEmpty()) {
-                    TopAppBar(
-                        title = {
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                placeholder = { Text("Rechercher une chanson...") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                leadingIcon = {
-                                    Icon(Icons.Default.Search, contentDescription = "Rechercher")
-                                },
-                                trailingIcon = {
-                                    if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { searchQuery = "" }) {
-                                            Icon(Icons.Default.Close, contentDescription = "Effacer")
-                                        }
+    // Grouper les chansons par lettre
+    val groupedSongs = remember(filteredSongs) {
+        filteredSongs.groupByFirstLetter { it.title }
+    }
+
+    // AJOUTÉ : Observer la chanson en cours
+    val currentSong = musicPlayer.currentSong
+    val isPlaying = musicPlayer.isPlaying
+
+    Scaffold(
+        topBar = {
+            if (hasPermission && songs.isNotEmpty()) {
+                TopAppBar(
+                    title = {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Rechercher une chanson...") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            leadingIcon = {
+                                Icon(Icons.Default.Search, contentDescription = "Rechercher")
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Default.Close, contentDescription = "Effacer")
                                     }
-                                },
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color.Transparent,
-                                    unfocusedBorderColor = Color.Transparent
-                                )
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedBorderColor = Color.Transparent
                             )
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface
                         )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
                     )
-                }
+                )
             }
-        ) { padding ->
-            if (!hasPermission) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
+        }
+    ) { padding ->
+        // ... [garder tout le code des permissions et états vides] ...
+
+        if (hasPermission && songs.isNotEmpty() && !(filteredSongs.isEmpty() && searchQuery.isNotEmpty())) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            "Permission nécessaire",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Nous avons besoin d'accéder à vos fichiers audio",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(onClick = onRequestPermission) {
-                            Text("Autoriser l'accès")
-                        }
-                    }
-                }
-            } else if (songs.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Aucune chanson trouvée")
-                    }
-                }
-            } else {
-                if (filteredSongs.isEmpty() && searchQuery.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(padding),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(80.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    groupedSongs.forEach { (letter, songsInGroup) ->
+                        item(key = "header_$letter") {
+                            Text(
+                                text = letter,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("Aucun résultat pour \"$searchQuery\"")
                         }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(padding)
-                    ) {
-                        items(filteredSongs) { song ->
+
+                        items(
+                            count = songsInGroup.size,
+                            key = { index -> songsInGroup[index].id }
+                        ) { index ->
+                            val song = songsInGroup[index]
                             SongItem(
                                 song = song,
-                                onClick = { onSongClick(song) }
+                                onClick = { onSongClick(song) },
+                                isPlaying = isPlaying,
+                                isCurrentSong = currentSong?.id == song.id // AJOUTÉ
                             )
                             HorizontalDivider()
                         }
                     }
                 }
+
+                FastScroller(
+                    alphabet = alphabet,
+                    onLetterSelected = { letter ->
+                        scope.launch {
+                            val targetIndex = filteredSongs.indexOfFirst {
+                                it.title.firstLetterOrHash() == letter
+                            }
+                            if (targetIndex >= 0) {
+                                var scrollIndex = 0
+                                for ((key, group) in groupedSongs) {
+                                    if (key == letter) {
+                                        listState.animateScrollToItem(scrollIndex)
+                                        break
+                                    }
+                                    scrollIndex += group.size + 1
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(vertical = 16.dp)
+                )
             }
         }
     }
+}
 
-    @Composable
-    fun AlbumsScreen(
-        albums: List<Album>,
-        hasPermission: Boolean,
-        imageService: ArtistImageService,
-        onRequestPermission: () -> Unit,
-        onAlbumClick: (Album) -> Unit
-    ) {
-        Scaffold(
+@Composable
+fun AlbumsScreen(
+    albums: List<Album>,
+    hasPermission: Boolean,
+    imageService: ArtistImageService,
+    onRequestPermission: () -> Unit,
+    onAlbumClick: (Album) -> Unit
+) {
+    // AÉtat pour le scroll et alphabet
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val alphabet = remember { generateAlphabet() }
 
-        ) { padding ->
-            if (!hasPermission) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
+    // Grouper les albums par lettre
+    val groupedAlbums = remember(albums) {
+        albums.groupByFirstLetter { it.name }
+    }
+
+    Scaffold {  padding ->
+        if (!hasPermission) {
+            // ... code existant pour la permission ...
+        } else if (albums.isEmpty()) {
+            // ... code existant pour liste vide ...
+        } else {
+            // Box pour superposer le FastScroller
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Album,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            "Permission nécessaire",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Nous avons besoin d'accéder à vos fichiers audio",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(onClick = onRequestPermission) {
-                            Text("Autoriser l'accès")
+                    groupedAlbums.forEach { (letter, albumsInGroup) ->
+                        // En-tête de section
+                        item(key = "header_$letter") {
+                            Text(
+                                text = letter,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        }
+
+                        // Albums du groupe
+                        items(
+                            count = albumsInGroup.size,
+                            key = { index -> albumsInGroup[index].id }
+                        ) { index ->
+                            AlbumItem(
+                                album = albumsInGroup[index],
+                                onClick = { onAlbumClick(albumsInGroup[index]) },
+                                imageService = imageService
+                            )
+                            HorizontalDivider()
                         }
                     }
                 }
-            } else if (albums.isEmpty()) {
-                Box(
+
+                // FastScroller
+                FastScroller(
+                    alphabet = alphabet,
+                    onLetterSelected = { letter ->
+                        scope.launch {
+                            var scrollIndex = 0
+                            for ((key, group) in groupedAlbums) {
+                                if (key == letter) {
+                                    listState.animateScrollToItem(scrollIndex)
+                                    break
+                                }
+                                scrollIndex += group.size + 1
+                            }
+                        }
+                    },
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.Album,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Aucun album trouvé")
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                ) {
-                    items(albums) { album ->
-                        AlbumItem(
-                            album = album,
-                            onClick = { onAlbumClick(album) },
-                            imageService = imageService
-                        )
-                        HorizontalDivider()
-                    }
-                }
+                        .align(Alignment.CenterEnd)
+                        .padding(vertical = 16.dp)
+                )
             }
         }
     }
+}
 
-    @Composable
-    fun SongItem(song: Song, onClick: () -> Unit) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.MusicNote,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(48.dp)
-                    .padding(end = 16.dp),
-                tint = MaterialTheme.colorScheme.primary
+@Composable
+fun SongItem(
+    song: Song,
+    onClick: () -> Unit,
+    isPlaying: Boolean = false,
+    isCurrentSong: Boolean = false
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .background(
+                if (isCurrentSong)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                else
+                    Color.Transparent
             )
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = song.title,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Icône ou animation de lecture
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .padding(end = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isCurrentSong && isPlaying) {
+                // Animation de barres audio pour la chanson en cours
+                PlayingIndicator()
+            } else {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = if (isCurrentSong)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
+            }
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = song.title,
+                fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = if (isCurrentSong)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurface
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Badge "En lecture" si c'est la chanson actuelle
+                if (isCurrentSong) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                    ) {
+                        Text(
+                            text = if (isPlaying) "En lecture" else "En pause",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
                 Text(
                     text = song.artist,
                     fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isCurrentSong)
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
 
-            Text(
-                text = formatDuration(song.duration),
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+        Text(
+            text = formatDuration(song.duration),
+            fontSize = 14.sp,
+            color = if (isCurrentSong)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+@Composable
+fun PlayingIndicator() {
+    // Animation de 3 barres audio
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.Bottom,
+        modifier = Modifier.height(24.dp)
+    ) {
+        repeat(3) { index ->
+            var height by remember { mutableStateOf(0.3f) }
+
+            LaunchedEffect(Unit) {
+                while (true) {
+                    // Animation aléatoire pour chaque barre
+                    animate(
+                        initialValue = height,
+                        targetValue = Random.nextFloat() * 0.7f + 0.3f,
+                        animationSpec = tween(
+                            durationMillis = Random.nextInt(300, 600),
+                            easing = LinearEasing
+                        )
+                    ) { value, _ ->
+                        height = value
+                    }
+                    delay(Random.nextLong(100, 200))
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(24.dp * height)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.primary)
             )
         }
     }
+}
+@Composable
+fun AlbumItem(
+    album: Album, onClick: () -> Unit, imageService: ArtistImageService
+) {
+    var albumCoverUrl by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
-    @Composable
-    fun AlbumItem(
-        album: Album,
-        onClick: () -> Unit,
-        imageService: ArtistImageService
-    ) {
-        var albumCoverUrl by remember { mutableStateOf<String?>(null) }
-        var isLoading by remember { mutableStateOf(true) }
-        val scope = rememberCoroutineScope()
-        val context = LocalContext.current
-
-        LaunchedEffect(album.id) {
-            scope.launch {
-                albumCoverUrl = imageService.getAlbumCoverUrl(album.name, album.artist)
-                isLoading = false
-            }
+    LaunchedEffect(album.id) {
+        scope.launch {
+            albumCoverUrl = imageService.getAlbumCoverUrl(album.name, album.artist)
+            isLoading = false
         }
+    }
 
-        Row(
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Card(
             modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .size(56.dp)
+                .clip(RoundedCornerShape(8.dp)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Card(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(8.dp)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            Box(
+                modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (albumCoverUrl != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(albumCoverUrl)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = "Pochette de ${album.name}",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Album,
-                            contentDescription = null,
-                            modifier = Modifier.size(32.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = album.name,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = album.artist,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Text(
-                text = "${album.songCount} chansons",
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-
-
-    @Composable
-    fun ArtistsScreen(
-        artists: List<Artist>,
-        hasPermission: Boolean,
-        imageService: ArtistImageService,
-        onRequestPermission: () -> Unit,
-        onArtistClick: (Artist) -> Unit
-    ) {
-        Scaffold(
-            topBar = { }
-        ) { padding ->
-            if (!hasPermission) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            "Permission nécessaire",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Nous avons besoin d'accéder à vos fichiers audio",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(onClick = onRequestPermission) {
-                            Text("Autoriser l'accès")
-                        }
-                    }
-                }
-            } else if (artists.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Aucun artiste trouvé")
-                    }
-                }
-            } else {
-                // GRILLE D'ARTISTES
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 110.dp),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                ) {
-                    items(artists.size) { index ->
-                        ArtistGridItem(
-                            artist = artists[index],
-                            onClick = { onArtistClick(artists[index]) },
-                            imageService = imageService
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    @Composable
-    fun ArtistGridItem(
-        artist: Artist,
-        onClick: () -> Unit,
-        imageService: ArtistImageService
-    ) {
-        var imageUrl by remember { mutableStateOf<String?>(null) }
-        var isLoading by remember { mutableStateOf(true) }
-        val scope = rememberCoroutineScope()
-        val context = LocalContext.current
-
-        LaunchedEffect(artist.name) {
-            scope.launch {
-                imageUrl = imageService.getArtistImageUrl(artist.name)
-                isLoading = false
-            }
-        }
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-        ) {
-            Card(
-                modifier = Modifier
-                    .size(110.dp)
-                    .clip(RoundedCornerShape(55.dp)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (imageUrl != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(imageUrl)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = "Photo de ${artist.name}",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(32.dp),
-                            strokeWidth = 3.dp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = artist.name,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
-    @Composable
-    fun ArtistItem(
-        artist: Artist,
-        onClick: () -> Unit,
-        imageService: ArtistImageService
-    ) {
-        var imageUrl by remember { mutableStateOf<String?>(null) }
-        var isLoading by remember { mutableStateOf(true) }
-        val scope = rememberCoroutineScope()
-        val context = LocalContext.current
-
-        LaunchedEffect(artist.name) {
-            scope.launch {
-                imageUrl = imageService.getArtistImageUrl(artist.name)
-                isLoading = false
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Card(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(28.dp)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (imageUrl != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(imageUrl)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = "Photo de ${artist.name}",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(32.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = artist.name,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${artist.albumCount} albums • ${artist.songCount} chansons",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-
-    @Composable
-    fun AlbumDetailScreen(
-        album: Album,
-        songs: List<Song>,
-        imageService: ArtistImageService,
-        onBack: () -> Unit,
-        onSongClick: (Song) -> Unit
-    ) {
-        var albumCoverUrl by remember { mutableStateOf<String?>(null) }
-        var isLoading by remember { mutableStateOf(true) }
-        val scope = rememberCoroutineScope()
-        val context = LocalContext.current
-
-        LaunchedEffect(album.id) {
-            scope.launch {
-                albumCoverUrl = imageService.getAlbumCoverUrl(album.name, album.artist)
-                isLoading = false
-            }
-        }
-
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(album.name) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, "Retour")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Card(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(8.dp)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (albumCoverUrl != null) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(albumCoverUrl)
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = "Pochette de ${album.name}",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else if (isLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(32.dp),
-                                        strokeWidth = 3.dp
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Album,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        Column {
-                            Text(
-                                text = album.name,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = album.artist,
-                                fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${songs.size} chansons",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                if (songs.isEmpty()) {
-                    Box(
+                if (albumCoverUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context).data(albumCoverUrl).crossfade(true)
+                            .build(),
+                        contentDescription = "Pochette de ${album.name}",
                         modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Aucune chanson dans cet album",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(songs) { song ->
-                            SongItem(song = song, onClick = { onSongClick(song) })
-                            HorizontalDivider()
-                        }
-                    }
-                }
-            }
-        }
-    }
-    @Composable
-    fun ArtistDetailScreen(
-        artist: Artist,
-        songs: List<Song>,
-        imageService: ArtistImageService,
-        onBack: () -> Unit,
-        onSongClick: (Song) -> Unit
-    ) {
-        var artistImageUrl by remember { mutableStateOf<String?>(null) }
-        var isLoading by remember { mutableStateOf(true) }
-        val scope = rememberCoroutineScope()
-        val context = LocalContext.current
-
-        LaunchedEffect(artist.name) {
-            scope.launch {
-                artistImageUrl = imageService.getArtistImageUrl(artist.name)
-                isLoading = false
-            }
-        }
-
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(artist.name) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, "Retour")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                        contentScale = ContentScale.Crop
                     )
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Card(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(40.dp)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (artistImageUrl != null) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(artistImageUrl)
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = "Photo de ${artist.name}",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else if (isLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(32.dp),
-                                        strokeWidth = 3.dp
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        Column {
-                            Text(
-                                text = artist.name,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${artist.albumCount} albums",
-                                fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${songs.size} chansons",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                if (songs.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Aucune chanson pour cet artiste",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                } else if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp), strokeWidth = 2.dp
+                    )
                 } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(songs) { song ->
-                            SongItem(song = song, onClick = { onSongClick(song) })
-                            HorizontalDivider()
-                        }
-                    }
-                }
-            }
-        }
-    }
-    @Composable
-    fun FoldersScreen(
-        folders: List<MusicFolder>,
-        hasPermission: Boolean,
-        onRequestPermission: () -> Unit,
-        onFolderClick: (MusicFolder) -> Unit
-    ) {
-        Scaffold(
-
-        ) { padding ->
-            if (!hasPermission) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            "Permission nécessaire",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Nous avons besoin d'accéder à vos fichiers audio",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(onClick = onRequestPermission) {
-                            Text("Autoriser l'accès")
-                        }
-                    }
-                }
-            } else if (folders.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Aucun dossier trouvé")
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                ) {
-                    items(folders) { folder ->
-                        FolderItem(
-                            folder = folder,
-                            onClick = { onFolderClick(folder) }
-                        )
-                        HorizontalDivider()
-                    }
-                }
-            }
-        }
-    }
-
-    @Composable
-    fun FolderItem(folder: MusicFolder, onClick: () -> Unit) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Card(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(8.dp)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
                     Icon(
-                        imageVector = Icons.Default.Folder,
+                        imageVector = Icons.Default.Album,
                         contentDescription = null,
                         modifier = Modifier.size(32.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = folder.name,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${folder.songCount} chansons",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = album.name,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = album.artist,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Text(
+            text = "${album.songCount} chansons",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+
+@Composable
+fun ArtistsScreen(
+    artists: List<Artist>,
+    hasPermission: Boolean,
+    imageService: ArtistImageService,
+    onRequestPermission: () -> Unit,
+    onArtistClick: (Artist) -> Unit
+) {
+    // État pour le scroll et alphabet
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val alphabet = remember { generateAlphabet() }
+
+    // Grouper les artistes par lettre
+    val groupedArtists = remember(artists) {
+        artists.groupByFirstLetter { it.name }
     }
 
-    @Composable
-    fun FolderDetailScreen(
-        folder: MusicFolder,
-        songs: List<Song>,
-        onBack: () -> Unit,
-        onSongClick: (Song) -> Unit
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(folder.name) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, "Retour")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-            }
-        ) { padding ->
-            Column(
+    Scaffold(
+        topBar = { }
+    ) { padding ->
+        if (!hasPermission) {
+            // ... code existant pour la permission ...
+        } else if (artists.isEmpty()) {
+            // ... code existant pour liste vide ...
+        } else {
+            // Box pour superposer le FastScroller
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
             ) {
-                // En-tête du dossier
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                // Utiliser LazyColumn au lieu de LazyVerticalGrid pour les en-têtes
+                LazyColumn(
+                    state = listState,
+                    contentPadding = PaddingValues(16.dp),
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Card(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(8.dp)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
+                    groupedArtists.forEach { (letter, artistsInGroup) ->
+                        // En-tête de section
+                        item(key = "header_$letter") {
+                            Text(
+                                text = letter,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                            )
+                        }
+
+                        // Grille d'artistes pour ce groupe
+                        item(key = "grid_$letter") {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
+                                artistsInGroup.chunked(3).forEach { rowArtists ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        rowArtists.forEach { artist ->
+                                            Box(modifier = Modifier.weight(1f)) {
+                                                ArtistGridItem(
+                                                    artist = artist,
+                                                    onClick = { onArtistClick(artist) },
+                                                    imageService = imageService
+                                                )
+                                            }
+                                        }
+                                        // Remplir les espaces vides
+                                        repeat(3 - rowArtists.size) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                //  FastScroller
+                FastScroller(
+                    alphabet = alphabet,
+                    onLetterSelected = { letter ->
+                        scope.launch {
+                            var scrollIndex = 0
+                            for ((key, group) in groupedArtists) {
+                                if (key == letter) {
+                                    listState.animateScrollToItem(scrollIndex)
+                                    break
+                                }
+                                scrollIndex += 2 // +1 pour header, +1 pour grid
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(vertical = 16.dp)
+                )
+            }
+        }
+    }
+}
+@Composable
+fun ArtistGridItem(
+    artist: Artist, onClick: () -> Unit, imageService: ArtistImageService
+) {
+    var imageUrl by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    LaunchedEffect(artist.name) {
+        scope.launch {
+            imageUrl = imageService.getArtistImageUrl(artist.name)
+            isLoading = false
+        }
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Card(
+            modifier = Modifier
+                .size(110.dp)
+                .clip(RoundedCornerShape(55.dp)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+            ) {
+                if (imageUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context).data(imageUrl).crossfade(true)
+                            .build(),
+                        contentDescription = "Photo de ${artist.name}",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(32.dp), strokeWidth = 3.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = artist.name,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+fun ArtistItem(
+    artist: Artist, onClick: () -> Unit, imageService: ArtistImageService
+) {
+    var imageUrl by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    LaunchedEffect(artist.name) {
+        scope.launch {
+            imageUrl = imageService.getArtistImageUrl(artist.name)
+            isLoading = false
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Card(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(28.dp)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+            ) {
+                if (imageUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context).data(imageUrl).crossfade(true)
+                            .build(),
+                        contentDescription = "Photo de ${artist.name}",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp), strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = artist.name,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${artist.albumCount} albums • ${artist.songCount} chansons",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+fun AlbumDetailScreen(
+    album: Album,
+    songs: List<Song>,
+    imageService: ArtistImageService,
+    musicPlayer: MusicService,
+    onBack: () -> Unit,
+    onSongClick: (Song) -> Unit
+) {
+    val currentSong = musicPlayer.currentSong
+    val isPlaying = musicPlayer.isPlaying
+    var albumCoverUrl by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    LaunchedEffect(album.id) {
+        scope.launch {
+            albumCoverUrl = imageService.getAlbumCoverUrl(album.name, album.artist)
+            isLoading = false
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(album.name) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, "Retour")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+                        ) {
+                            if (albumCoverUrl != null) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context).data(albumCoverUrl)
+                                        .crossfade(true).build(),
+                                    contentDescription = "Pochette de ${album.name}",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp), strokeWidth = 3.dp
+                                )
+                            } else {
                                 Icon(
-                                    imageVector = Icons.Default.Folder,
+                                    imageVector = Icons.Default.Album,
                                     contentDescription = null,
                                     modifier = Modifier.size(48.dp),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        Column {
-                            Text(
-                                text = folder.name,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${songs.size} chansons",
-                                fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     }
-                }
 
-                // Liste des chansons
-                if (songs.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column {
                         Text(
-                            "Aucune chanson dans ce dossier",
+                            text = album.name,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = album.artist,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${songs.size} chansons",
+                            fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(songs) { song ->
-                            SongItem(song = song, onClick = { onSongClick(song) })
-                            HorizontalDivider()
-                        }
+                }
+            }
+
+            if (songs.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Aucune chanson dans cet album",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(songs) { song ->
+                        SongItem(
+                            song = song,
+                            onClick = { onSongClick(song) },
+                            isPlaying = isPlaying,                    // AJOUTÉ
+                            isCurrentSong = currentSong?.id == song.id // AJOUTÉ
+                        )
+                        HorizontalDivider()
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+fun ArtistDetailScreen(
+    artist: Artist,
+    songs: List<Song>,
+    imageService: ArtistImageService,
+    musicPlayer: MusicService,
+    onBack: () -> Unit,
+    onSongClick: (Song) -> Unit
+) {
+    val currentSong = musicPlayer.currentSong
+    val isPlaying = musicPlayer.isPlaying
+    var artistImageUrl by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    LaunchedEffect(artist.name) {
+        scope.launch {
+            artistImageUrl = imageService.getArtistImageUrl(artist.name)
+            isLoading = false
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(artist.name) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, "Retour")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(40.dp)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+                        ) {
+                            if (artistImageUrl != null) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context).data(artistImageUrl)
+                                        .crossfade(true).build(),
+                                    contentDescription = "Photo de ${artist.name}",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp), strokeWidth = 3.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column {
+                        Text(
+                            text = artist.name,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${artist.albumCount} albums",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${songs.size} chansons",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            if (songs.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Aucune chanson pour cet artiste",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(songs) { song ->
+                        SongItem(
+                            song = song,
+                            onClick = { onSongClick(song) },
+                            isPlaying = isPlaying,
+                            isCurrentSong = currentSong?.id == song.id // AJOUTÉ
+                        )
+                        HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FoldersScreen(
+    folders: List<MusicFolder>,
+    hasPermission: Boolean,
+    onRequestPermission: () -> Unit,
+    onFolderClick: (MusicFolder) -> Unit
+) {
+    Scaffold(
+
+    ) { padding ->
+        if (!hasPermission) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Permission nécessaire", fontSize = 20.sp, fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Nous avons besoin d'accéder à vos fichiers audio",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(onClick = onRequestPermission) {
+                        Text("Autoriser l'accès")
+                    }
+                }
+            }
+        } else if (folders.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Aucun dossier trouvé")
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                items(folders) { folder ->
+                    FolderItem(
+                        folder = folder, onClick = { onFolderClick(folder) })
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FolderItem(folder: MusicFolder, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Card(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(8.dp)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Folder,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = folder.name,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${folder.songCount} chansons",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+fun FolderDetailScreen(
+    folder: MusicFolder, songs: List<Song>, onBack: () -> Unit, onSongClick: (Song) -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(folder.name) }, navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Default.ArrowBack, "Retour")
+                }
+            }, colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+            )
+        }) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // En-tête du dossier
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column {
+                        Text(
+                            text = folder.name,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${songs.size} chansons",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Liste des chansons
+            if (songs.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Aucune chanson dans ce dossier",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(songs) { song ->
+                        SongItem(song = song, onClick = { onSongClick(song) })
+                        HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
+}
