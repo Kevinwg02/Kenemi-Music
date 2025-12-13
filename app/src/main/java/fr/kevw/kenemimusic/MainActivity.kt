@@ -57,6 +57,14 @@ import kotlin.random.Random
 
 import android.provider.Settings
 
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Clear
+
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.lazy.itemsIndexed
+
+
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
 fun customColorScheme() = darkColorScheme(
@@ -97,7 +105,10 @@ data class Playlist(
 data class MusicFolder(
     val path: String, val name: String, val songCount: Int
 )
-
+data class QueueItem(
+    val song: Song,
+    val queuePosition: Int
+)
 enum class RepeatMode {
     OFF, ONE, ALL
 }
@@ -181,7 +192,7 @@ class MainActivity : ComponentActivity() {
     private val favorites = mutableStateListOf<Long>()
     private var musicService: MusicService? by mutableStateOf(null)
     private var serviceBound = false
-
+    private var showQueueScreen by mutableStateOf(false)
     private lateinit var playlistManager: PlaylistManager
     private lateinit var settingsManager: SettingsManager
 
@@ -736,10 +747,238 @@ class MainActivity : ComponentActivity() {
                         onRequestPermission = { requestPermission.launch(getPermissionString()) } // ⬅️ LIGNE AJOUTÉE
                     )
                 }
+                if (showQueueScreen) {
+                    CurrentQueueScreen(
+                        musicPlayer = musicPlayer,
+                        onBack = { showQueueScreen = false },
+                        onReorder = { fromIndex, toIndex ->
+                            val currentPlaylist = musicPlayer.getCurrentPlaylist().toMutableList()
+                            val item = currentPlaylist.removeAt(fromIndex)
+                            currentPlaylist.add(toIndex, item)
+                            musicPlayer.updatePlaylist(currentPlaylist)
+                        }
+                    )
+                }
             }
         }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+    @Composable
+    fun CurrentQueueScreen(
+        musicPlayer: MusicService,
+        onBack: () -> Unit,
+        onReorder: (Int, Int) -> Unit
+    ) {
+        val currentSong = musicPlayer.currentSong
+        val playlist = remember(musicPlayer.currentSong) {
+            mutableStateListOf<Song>().apply {
+                addAll(musicPlayer.getCurrentPlaylist())
+            }
+        }
+
+        // État pour le drag and drop
+        var draggedItem by remember { mutableStateOf<Song?>(null) }
+        var draggedOverItem by remember { mutableStateOf<Song?>(null) }
+
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text("Lecture en cours")
+                            Text(
+                                "${playlist.size} chanson${if (playlist.size > 1) "s" else ""}",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Default.ArrowBack, "Retour")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            // Vider la file d'attente
+                            playlist.clear()
+                            onReorder(0, 0) // Force la mise à jour
+                        }) {
+                            Icon(Icons.Default.Clear, "Vider la file")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+            }
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                itemsIndexed(
+                    items = playlist,
+                    key = { _, song -> song.id }
+                ) { index, song ->
+                    val isBeingDragged = draggedItem?.id == song.id
+                    val isDropTarget = draggedOverItem?.id == song.id
+
+                    QueueSongItemSimple(
+                        song = song,
+                        isCurrentSong = currentSong?.id == song.id,
+                        isPlaying = musicPlayer.isPlaying && currentSong?.id == song.id,
+                        queuePosition = index + 1,
+                        isBeingDragged = isBeingDragged,
+                        isDropTarget = isDropTarget,
+                        onClick = {
+                            musicPlayer.playSong(song)
+                            onBack()
+                        },
+                        onDragStart = { draggedItem = song },
+                        onDragEnd = {
+                            if (draggedItem != null && draggedOverItem != null && draggedItem != draggedOverItem) {
+                                val fromIndex = playlist.indexOfFirst { it.id == draggedItem!!.id }
+                                val toIndex = playlist.indexOfFirst { it.id == draggedOverItem!!.id }
+
+                                if (fromIndex != -1 && toIndex != -1) {
+                                    // Mise à jour locale
+                                    val item = playlist.removeAt(fromIndex)
+                                    playlist.add(toIndex, item)
+
+                                    // Mise à jour du service
+                                    onReorder(fromIndex, toIndex)
+                                }
+                            }
+                            draggedItem = null
+                            draggedOverItem = null
+                        },
+                        onDragOver = { draggedOverItem = song }
+                    )
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalFoundationApi::class)
+    @Composable
+    fun QueueSongItemSimple(
+        song: Song,
+        isCurrentSong: Boolean,
+        isPlaying: Boolean,
+        queuePosition: Int,
+        isBeingDragged: Boolean,
+        isDropTarget: Boolean,
+        onClick: () -> Unit,
+        onDragStart: () -> Unit,
+        onDragEnd: () -> Unit,
+        onDragOver: () -> Unit
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onDragStart
+                )
+                .background(
+                    when {
+                        isBeingDragged -> MaterialTheme.colorScheme.surfaceVariant
+                        isDropTarget -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        isCurrentSong -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        else -> Color.Transparent
+                    }
+                ),
+            tonalElevation = if (isBeingDragged) 8.dp else 0.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Numéro de position
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .padding(end = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isCurrentSong && isPlaying) {
+                        PlayingIndicator()
+                    } else {
+                        Text(
+                            text = queuePosition.toString(),
+                            fontSize = 16.sp,
+                            fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isCurrentSong)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Infos de la chanson
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = song.title,
+                        fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (isCurrentSong)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (isCurrentSong) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                            ) {
+                                Text(
+                                    text = if (isPlaying) "En lecture" else "En pause",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = song.artist,
+                            fontSize = 14.sp,
+                            color = if (isCurrentSong)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                // Icône de drag
+                Icon(
+                    imageVector = Icons.Default.DragHandle,
+                    contentDescription = "Réorganiser",
+                    modifier = Modifier
+                        .size(24.dp)
+                        .padding(start = 8.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
     @Composable
     fun PlaylistsScreen(
         playlists: List<Playlist>,
@@ -1531,6 +1770,7 @@ class MainActivity : ComponentActivity() {
                         FilledTonalIconButton(
                             onClick = {
                                 // TODO : ouvrir la playlist / bottom sheet
+                                showQueueScreen = true
                             },
                             modifier = Modifier.size(40.dp)
                         ) {
@@ -1539,7 +1779,6 @@ class MainActivity : ComponentActivity() {
                                 contentDescription = "Liste de lecture"
                             )
                         }
-
                         // --- BOUTON FAVORI (DROITE) ---
                         FilledTonalIconButton(
                             onClick = {

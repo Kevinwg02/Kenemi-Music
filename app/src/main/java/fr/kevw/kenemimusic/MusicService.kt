@@ -447,6 +447,15 @@ class MusicService : Service() {
         mediaSession.release()
         release()
     }
+    fun getCurrentPlaylist(): List<Song> = playlist.toList()
+
+    fun updatePlaylist(newPlaylist: List<Song>) {
+        playlist = newPlaylist
+        // Si une chanson est en cours, on met à jour l'index
+        currentSong?.let { current ->
+            currentIndex = playlist.indexOfFirst { it.id == current.id }
+        }
+    }
 
     // AJOUTÉ : Gérer la tâche supprimée de la liste des tâches récentes
     override fun onTaskRemoved(rootIntent: Intent?) {

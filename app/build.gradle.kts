@@ -61,4 +61,6 @@ dependencies {
     implementation("androidx.media:media:1.7.0")
 // Gson pour la sérialisation JSON des playlists
     implementation("com.google.code.gson:gson:2.10.1")
+
+
 }
