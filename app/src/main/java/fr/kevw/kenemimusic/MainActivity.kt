@@ -52,9 +52,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.foundation.background
 import androidx.compose.material3.Surface
 import kotlin.random.Random
+
+import android.provider.Settings
 
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
@@ -100,7 +101,76 @@ data class MusicFolder(
 enum class RepeatMode {
     OFF, ONE, ALL
 }
+@Composable
+fun PermissionRequiredMessage(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    onOpenSettings: () -> Unit
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(80.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Permission requise",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Pour afficher $title, vous devez autoriser l'accès aux fichiers audio dans les paramètres de l'application. OU",
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
 
+            Button(
+                onClick = onOpenSettings,
+                modifier = Modifier.fillMaxWidth(0.8f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = null,
+                    modifier = Modifier.size(10.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Ouvrir les paramètres")
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Paramètres → Kenemi Music → Autorisations → Fichiers et contenus multimédias",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+    }
+}
+
+// Fonction pour ouvrir les paramètres de l'app
+private fun openAppSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.fromParts("package", context.packageName, null)
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    }
+    context.startActivity(intent)
+}
 class MainActivity : ComponentActivity() {
     private val songs = mutableStateListOf<Song>()
     private val albums = mutableStateListOf<Album>()
@@ -662,7 +732,9 @@ class MainActivity : ComponentActivity() {
                         onForceScan = { forceScanMusic() },
                         onThemeChanged = { newTheme ->
                             isDarkThemeState.value = newTheme
-                        })
+                        },
+                        onRequestPermission = { requestPermission.launch(getPermissionString()) } // ⬅️ LIGNE AJOUTÉE
+                    )
                 }
             }
         }
@@ -1591,15 +1663,15 @@ private fun formatDuration(ms: Long): String {
     val minutes = (ms / (1000 * 60)) % 60
     return String.format("%d:%02d", minutes, seconds)
 }
-
 @Composable
 fun SongListScreen(
     songs: List<Song>,
     hasPermission: Boolean,
-    musicPlayer: MusicService, // AJOUTÉ
+    musicPlayer: MusicService,
     onRequestPermission: () -> Unit,
     onSongClick: (Song) -> Unit
 ) {
+    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     val filteredSongs = remember(songs, searchQuery) {
         if (searchQuery.isBlank()) {
@@ -1613,17 +1685,13 @@ fun SongListScreen(
         }
     }
 
-    // État pour le scroll et alphabet
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val alphabet = remember { generateAlphabet() }
-
-    // Grouper les chansons par lettre
     val groupedSongs = remember(filteredSongs) {
         filteredSongs.groupByFirstLetter { it.title }
     }
 
-    // AJOUTÉ : Observer la chanson en cours
     val currentSong = musicPlayer.currentSong
     val isPlaying = musicPlayer.isPlaying
 
@@ -1661,9 +1729,50 @@ fun SongListScreen(
             }
         }
     ) { padding ->
-        // ... [garder tout le code des permissions et états vides] ...
-
-        if (hasPermission && songs.isNotEmpty() && !(filteredSongs.isEmpty() && searchQuery.isNotEmpty())) {
+        // ⬇️ AJOUTÉ : Message si pas de permission
+        if (!hasPermission) {
+            PermissionRequiredMessage(
+                icon = Icons.Default.MusicNote,
+                title = "vos chansons",
+                onOpenSettings = { openAppSettings(context) }
+            )
+        } else if (songs.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Aucune chanson trouvée")
+                }
+            }
+        } else if (filteredSongs.isEmpty() && searchQuery.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Aucun résultat pour \"$searchQuery\"")
+                }
+            }
+        } else {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1696,7 +1805,7 @@ fun SongListScreen(
                                 song = song,
                                 onClick = { onSongClick(song) },
                                 isPlaying = isPlaying,
-                                isCurrentSong = currentSong?.id == song.id // AJOUTÉ
+                                isCurrentSong = currentSong?.id == song.id
                             )
                             HorizontalDivider()
                         }
@@ -1730,7 +1839,6 @@ fun SongListScreen(
         }
     }
 }
-
 @Composable
 fun AlbumsScreen(
     albums: List<Album>,
@@ -1739,23 +1847,41 @@ fun AlbumsScreen(
     onRequestPermission: () -> Unit,
     onAlbumClick: (Album) -> Unit
 ) {
-    // AÉtat pour le scroll et alphabet
+    val context = LocalContext.current
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val alphabet = remember { generateAlphabet() }
-
-    // Grouper les albums par lettre
     val groupedAlbums = remember(albums) {
         albums.groupByFirstLetter { it.name }
     }
 
-    Scaffold {  padding ->
+    Scaffold { padding ->
+
         if (!hasPermission) {
-            // ... code existant pour la permission ...
+            PermissionRequiredMessage(
+                icon = Icons.Default.Album,
+                title = "vos albums",
+                onOpenSettings = { openAppSettings(context) }
+            )
         } else if (albums.isEmpty()) {
-            // ... code existant pour liste vide ...
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Album,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Aucun album trouvé")
+                }
+            }
         } else {
-            // Box pour superposer le FastScroller
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1766,7 +1892,6 @@ fun AlbumsScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     groupedAlbums.forEach { (letter, albumsInGroup) ->
-                        // En-tête de section
                         item(key = "header_$letter") {
                             Text(
                                 text = letter,
@@ -1780,7 +1905,6 @@ fun AlbumsScreen(
                             )
                         }
 
-                        // Albums du groupe
                         items(
                             count = albumsInGroup.size,
                             key = { index -> albumsInGroup[index].id }
@@ -1795,7 +1919,6 @@ fun AlbumsScreen(
                     }
                 }
 
-                // FastScroller
                 FastScroller(
                     alphabet = alphabet,
                     onLetterSelected = { letter ->
@@ -1905,14 +2028,14 @@ fun SongItem(
             }
         }
 
-        Text(
-            text = formatDuration(song.duration),
-            fontSize = 14.sp,
-            color = if (isCurrentSong)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.onSurfaceVariant
-        )
+//        Text(
+//            text = formatDuration(song.duration),
+//            fontSize = 14.sp,
+//            color = if (isCurrentSong)
+//                MaterialTheme.colorScheme.primary
+//            else
+//                MaterialTheme.colorScheme.onSurfaceVariant
+//        )
     }
 }
 @Composable
@@ -2034,7 +2157,6 @@ fun AlbumItem(
     }
 }
 
-
 @Composable
 fun ArtistsScreen(
     artists: List<Artist>,
@@ -2043,12 +2165,10 @@ fun ArtistsScreen(
     onRequestPermission: () -> Unit,
     onArtistClick: (Artist) -> Unit
 ) {
-    // État pour le scroll et alphabet
+    val context = LocalContext.current
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val alphabet = remember { generateAlphabet() }
-
-    // Grouper les artistes par lettre
     val groupedArtists = remember(artists) {
         artists.groupByFirstLetter { it.name }
     }
@@ -2056,25 +2176,43 @@ fun ArtistsScreen(
     Scaffold(
         topBar = { }
     ) { padding ->
+        // ⬇️ AJOUTÉ : Message si pas de permission
         if (!hasPermission) {
-            // ... code existant pour la permission ...
+            PermissionRequiredMessage(
+                icon = Icons.Default.Person,
+                title = "vos artistes",
+                onOpenSettings = { openAppSettings(context) }
+            )
         } else if (artists.isEmpty()) {
-            // ... code existant pour liste vide ...
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Aucun artiste trouvé")
+                }
+            }
         } else {
-            // Box pour superposer le FastScroller
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
             ) {
-                // Utiliser LazyColumn au lieu de LazyVerticalGrid pour les en-têtes
                 LazyColumn(
                     state = listState,
                     contentPadding = PaddingValues(16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     groupedArtists.forEach { (letter, artistsInGroup) ->
-                        // En-tête de section
                         item(key = "header_$letter") {
                             Text(
                                 text = letter,
@@ -2087,7 +2225,6 @@ fun ArtistsScreen(
                             )
                         }
 
-                        // Grille d'artistes pour ce groupe
                         item(key = "grid_$letter") {
                             Column(
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -2106,7 +2243,6 @@ fun ArtistsScreen(
                                                 )
                                             }
                                         }
-                                        // Remplir les espaces vides
                                         repeat(3 - rowArtists.size) {
                                             Spacer(modifier = Modifier.weight(1f))
                                         }
@@ -2117,7 +2253,6 @@ fun ArtistsScreen(
                     }
                 }
 
-                //  FastScroller
                 FastScroller(
                     alphabet = alphabet,
                     onLetterSelected = { letter ->
@@ -2128,7 +2263,7 @@ fun ArtistsScreen(
                                     listState.animateScrollToItem(scrollIndex)
                                     break
                                 }
-                                scrollIndex += 2 // +1 pour header, +1 pour grid
+                                scrollIndex += 2
                             }
                         }
                     },

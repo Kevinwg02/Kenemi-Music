@@ -1,7 +1,12 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package fr.kevw.kenemimusic
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,11 +16,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.Manifest
 
 // ===== CLASSE POUR GÉRER LES PARAMÈTRES =====
 class SettingsManager(context: Context) {
@@ -41,13 +49,54 @@ fun SettingsScreen(
     settingsManager: SettingsManager,
     onBack: () -> Unit,
     onForceScan: () -> Unit,
-    onThemeChanged: (Boolean) -> Unit
+    onThemeChanged: (Boolean) -> Unit,
+    onRequestPermission: () -> Unit
 ) {
+    val context = LocalContext.current
     var isDarkTheme by remember { mutableStateOf(settingsManager.isDarkTheme) }
     var autoScanOnStart by remember { mutableStateOf(settingsManager.autoScanOnStart) }
     var highQualityImages by remember { mutableStateOf(settingsManager.highQualityImages) }
     var isScanning by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    // Vérifier les permissions en temps réel
+    var hasAudioPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                getAudioPermissionString()
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            } else true
+        )
+    }
+
+    // Rafraîchir l'état des permissions quand on revient sur l'écran
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            hasAudioPermission = ContextCompat.checkSelfPermission(
+                context,
+                getAudioPermissionString()
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                hasNotificationPermission = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -69,6 +118,121 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // ===== SECTION PERMISSIONS =====
+            item {
+                Text(
+                    text = "PERMISSIONS",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 8.dp)
+                )
+            }
+
+            // Permission Audio/Musique
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            if (!hasAudioPermission) {
+                                onRequestPermission()
+                            } else {
+                                // Ouvrir les paramètres de l'app
+                                openAppSettings(context)
+                            }
+                        }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = if (hasAudioPermission)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Accès aux fichiers audio", fontWeight = FontWeight.Medium)
+                        Text(
+                            text = if (hasAudioPermission)
+                                "Accordée - Requis pour lire vos musiques"
+                            else
+                                "Non accordée - Appuyez pour autoriser",
+                            fontSize = 14.sp,
+                            color = if (hasAudioPermission)
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            else
+                                MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Icon(
+                        imageVector = if (hasAudioPermission)
+                            Icons.Default.CheckCircle
+                        else
+                            Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = if (hasAudioPermission)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.error
+                    )
+                }
+                HorizontalDivider()
+            }
+
+            // Permission Notifications (Android 13+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                openAppSettings(context)
+                            }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = if (hasNotificationPermission)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Notifications", fontWeight = FontWeight.Medium)
+                            Text(
+                                text = if (hasNotificationPermission)
+                                    "Accordée - Contrôles de lecture"
+                                else
+                                    "Non accordée - Optionnelle",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            imageVector = if (hasNotificationPermission)
+                                Icons.Default.CheckCircle
+                            else
+                                Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = if (hasNotificationPermission)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    HorizontalDivider()
+                }
+            }
+
             // SECTION APPARENCE
             item {
                 Text(
@@ -76,7 +240,7 @@ fun SettingsScreen(
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 8.dp)
+                    modifier = Modifier.padding(16.dp, 24.dp, 16.dp, 8.dp)
                 )
             }
 
@@ -101,10 +265,8 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Thème sombre", fontWeight = FontWeight.Medium)
-                        Text("Redémmarge de l'application nécéssaire")
                         Text(
-                            text = if (isDarkTheme) "Activé" else "Désactivé",
-
+                            text = "Redémarrage de l'application nécessaire",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -156,17 +318,6 @@ fun SettingsScreen(
                     )
                 }
                 HorizontalDivider()
-            }
-
-            // SECTION LECTURE
-            item {
-                Text(
-                    text = "LECTURE",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(16.dp, 24.dp, 16.dp, 8.dp)
-                )
             }
 
             // SECTION BIBLIOTHÈQUE
@@ -223,7 +374,7 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(enabled = !isScanning) {
+                        .clickable(enabled = !isScanning && hasAudioPermission) {
                             isScanning = true
                             scope.launch {
                                 onForceScan()
@@ -244,14 +395,26 @@ fun SettingsScreen(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = null,
                             modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = if (hasAudioPermission)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Forcer le scan", fontWeight = FontWeight.Medium)
                         Text(
-                            text = if (isScanning) "Scan en cours..." else "Rechercher de nouvelles musiques",
+                            text = "Forcer le scan",
+                            fontWeight = FontWeight.Medium,
+                            color = if (hasAudioPermission)
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = if (isScanning) "Scan en cours..."
+                            else if (hasAudioPermission) "Rechercher de nouvelles musiques"
+                            else "Permission audio requise",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -294,7 +457,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Version", fontWeight = FontWeight.Medium)
                         Text(
-                            text = "11.12.25",
+                            text = "13.12.2024",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -303,4 +466,22 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+// Fonction pour obtenir la permission audio selon la version Android
+private fun getAudioPermissionString(): String {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+}
+
+// Fonction pour ouvrir les paramètres de l'application
+private fun openAppSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.fromParts("package", context.packageName, null)
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    }
+    context.startActivity(intent)
 }
