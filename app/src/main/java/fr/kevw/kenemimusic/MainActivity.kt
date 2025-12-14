@@ -4,65 +4,127 @@ package fr.kevw.kenemimusic
 
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.provider.MediaStore
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.delay
-import androidx.compose.ui.graphics.Color
-import java.io.File
-import android.content.ComponentName
-import android.content.Intent
-import android.content.ServiceConnection
-import android.os.IBinder
-import androidx.compose.foundation.background
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.ui.text.style.TextAlign
-
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.foundation.lazy.rememberLazyListState
-
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.material3.Surface
+import java.io.File
 import kotlin.random.Random
-
-import android.provider.Settings
-
-import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material.icons.filled.Clear
-
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.lazy.itemsIndexed
 
 
 // ===== PERSONNALISATION DES COULEURS =====
@@ -763,6 +825,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
     @Composable
     fun CurrentQueueScreen(
@@ -771,15 +834,11 @@ class MainActivity : ComponentActivity() {
         onReorder: (Int, Int) -> Unit
     ) {
         val currentSong = musicPlayer.currentSong
-        val playlist = remember(musicPlayer.currentSong) {
-            mutableStateListOf<Song>().apply {
-                addAll(musicPlayer.getCurrentPlaylist())
-            }
-        }
 
-        // État pour le drag and drop
-        var draggedItem by remember { mutableStateOf<Song?>(null) }
-        var draggedOverItem by remember { mutableStateOf<Song?>(null) }
+        // ✅ SOLUTION : Forcer la recomposition avec playlistVersion
+        val playlist = remember(musicPlayer.playlistVersion) {
+            musicPlayer.getCurrentPlaylist()
+        }
 
         Scaffold(
             topBar = {
@@ -801,9 +860,8 @@ class MainActivity : ComponentActivity() {
                     },
                     actions = {
                         IconButton(onClick = {
-                            // Vider la file d'attente
-                            playlist.clear()
-                            onReorder(0, 0) // Force la mise à jour
+                            musicPlayer.updatePlaylist(emptyList())
+                            onBack()
                         }) {
                             Icon(Icons.Default.Clear, "Vider la file")
                         }
@@ -814,85 +872,102 @@ class MainActivity : ComponentActivity() {
                 )
             }
         ) { padding ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                itemsIndexed(
-                    items = playlist,
-                    key = { _, song -> song.id }
-                ) { index, song ->
-                    val isBeingDragged = draggedItem?.id == song.id
-                    val isDropTarget = draggedOverItem?.id == song.id
-
-                    QueueSongItemSimple(
-                        song = song,
-                        isCurrentSong = currentSong?.id == song.id,
-                        isPlaying = musicPlayer.isPlaying && currentSong?.id == song.id,
-                        queuePosition = index + 1,
-                        isBeingDragged = isBeingDragged,
-                        isDropTarget = isDropTarget,
-                        onClick = {
-                            musicPlayer.playSong(song)
-                            onBack()
-                        },
-                        onDragStart = { draggedItem = song },
-                        onDragEnd = {
-                            if (draggedItem != null && draggedOverItem != null && draggedItem != draggedOverItem) {
-                                val fromIndex = playlist.indexOfFirst { it.id == draggedItem!!.id }
-                                val toIndex = playlist.indexOfFirst { it.id == draggedOverItem!!.id }
-
-                                if (fromIndex != -1 && toIndex != -1) {
-                                    // Mise à jour locale
-                                    val item = playlist.removeAt(fromIndex)
-                                    playlist.add(toIndex, item)
-
-                                    // Mise à jour du service
-                                    onReorder(fromIndex, toIndex)
+            if (playlist.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.QueueMusic,
+                            contentDescription = null,
+                            modifier = Modifier.size(80.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "File d'attente vide",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Lancez une chanson pour commencer",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
+                    itemsIndexed(
+                        items = playlist,
+                        key = { _, song -> song.id }
+                    ) { index, song ->
+                        QueueSongItem(
+                            song = song,
+                            isCurrentSong = currentSong?.id == song.id,
+                            isPlaying = musicPlayer.isPlaying && currentSong?.id == song.id,
+                            queuePosition = index + 1,
+                            onClick = {
+                                musicPlayer.playSong(song)
+                                onBack()
+                            },
+                            onMoveUp = {
+                                if (index > 0) {
+                                    onReorder(index, index - 1)
                                 }
-                            }
-                            draggedItem = null
-                            draggedOverItem = null
-                        },
-                        onDragOver = { draggedOverItem = song }
-                    )
-                    HorizontalDivider()
+                            },
+                            onMoveDown = {
+                                if (index < playlist.size - 1) {
+                                    onReorder(index, index + 1)
+                                }
+                            },
+                            canMoveUp = index > 0,
+                            canMoveDown = index < playlist.size - 1,
+                            modifier = Modifier.animateItemPlacement(
+                                animationSpec = tween(durationMillis = 300)
+                            )
+                        )
+                        HorizontalDivider()
+                    }
                 }
             }
         }
     }
 
-    @OptIn(ExperimentalFoundationApi::class)
     @Composable
-    fun QueueSongItemSimple(
+    fun QueueSongItem(
         song: Song,
         isCurrentSong: Boolean,
         isPlaying: Boolean,
         queuePosition: Int,
-        isBeingDragged: Boolean,
-        isDropTarget: Boolean,
         onClick: () -> Unit,
-        onDragStart: () -> Unit,
-        onDragEnd: () -> Unit,
-        onDragOver: () -> Unit
+        onMoveUp: () -> Unit,
+        onMoveDown: () -> Unit,
+        canMoveUp: Boolean,
+        canMoveDown: Boolean,
+        modifier: Modifier = Modifier
     ) {
         Surface(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxWidth()
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onDragStart
-                )
+                .clickable(onClick = onClick)
                 .background(
-                    when {
-                        isBeingDragged -> MaterialTheme.colorScheme.surfaceVariant
-                        isDropTarget -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                        isCurrentSong -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                        else -> Color.Transparent
-                    }
-                ),
-            tonalElevation = if (isBeingDragged) 8.dp else 0.dp
+                    if (isCurrentSong)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                    else
+                        Color.Transparent
+                )
         ) {
             Row(
                 modifier = Modifier
@@ -967,15 +1042,44 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Icône de drag
-                Icon(
-                    imageVector = Icons.Default.DragHandle,
-                    contentDescription = "Réorganiser",
-                    modifier = Modifier
-                        .size(24.dp)
-                        .padding(start = 8.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // Boutons de réorganisation
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.width(40.dp)
+                ) {
+                    IconButton(
+                        onClick = onMoveUp,
+                        enabled = canMoveUp,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Monter",
+                            modifier = Modifier.size(28.dp),
+                            tint = if (canMoveUp)
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onMoveDown,
+                        enabled = canMoveDown,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Descendre",
+                            modifier = Modifier.size(28.dp),
+                            tint = if (canMoveDown)
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        )
+                    }
+                }
             }
         }
     }

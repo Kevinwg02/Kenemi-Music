@@ -34,6 +34,8 @@ class MusicService : Service() {
 
     private var playlist: List<Song> = emptyList()
     var currentIndex by mutableStateOf(-1)
+    var playlistVersion by mutableStateOf(0)
+        private set
     var onStateChanged: (() -> Unit)? = null
 
     private lateinit var mediaSession: MediaSessionCompat
@@ -451,10 +453,10 @@ class MusicService : Service() {
 
     fun updatePlaylist(newPlaylist: List<Song>) {
         playlist = newPlaylist
-        // Si une chanson est en cours, on met à jour l'index
         currentSong?.let { current ->
             currentIndex = playlist.indexOfFirst { it.id == current.id }
         }
+        playlistVersion++
     }
 
     // AJOUTÉ : Gérer la tâche supprimée de la liste des tâches récentes
