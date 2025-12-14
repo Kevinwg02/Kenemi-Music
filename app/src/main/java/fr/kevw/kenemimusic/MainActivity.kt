@@ -1789,7 +1789,7 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(isPlaying) {
             while (isPlaying) {
                 musicPlayer.updatePosition()
-                delay(100)
+                delay(250)
             }
         }
 
