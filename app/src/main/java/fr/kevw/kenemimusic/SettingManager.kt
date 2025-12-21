@@ -63,7 +63,7 @@ fun SettingsScreen(
     var showClearCacheDialog by remember { mutableStateOf(false) } // ✅ AJOUTÉ
     val scope = rememberCoroutineScope()
 
-    // ✅ AJOUTÉ : Charger la taille du cache au démarrage
+    // ✅ Charger la taille du cache au démarrage
     LaunchedEffect(Unit) {
         cacheSize = imageService.getCacheSize()
     }
@@ -92,7 +92,7 @@ fun SettingsScreen(
     // Rafraîchir l'état des permissions quand on revient sur l'écran
     LaunchedEffect(Unit) {
         while (true) {
-            delay(1000)
+            delay(500)
             hasAudioPermission = ContextCompat.checkSelfPermission(
                 context,
                 getAudioPermissionString()
@@ -436,7 +436,7 @@ fun SettingsScreen(
                 HorizontalDivider()
             }
 
-            // ✅ AJOUTÉ : Vider le cache des images
+            // ✅ Vider le cache des images
             item {
                 Row(
                     modifier = Modifier
@@ -512,7 +512,7 @@ fun SettingsScreen(
         }
     }
 
-    // ✅ AJOUTÉ : Dialog de confirmation pour vider le cache
+    // ✅ Dialog de confirmation pour vider le cache
     if (showClearCacheDialog) {
         AlertDialog(
             onDismissRequest = { showClearCacheDialog = false },

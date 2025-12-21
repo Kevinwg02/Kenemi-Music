@@ -125,6 +125,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.random.Random
+import androidx.activity.compose.BackHandler
 
 
 // ===== PERSONNALISATION DES COULEURS =====
@@ -167,10 +168,7 @@ data class Playlist(
 data class MusicFolder(
     val path: String, val name: String, val songCount: Int
 )
-data class QueueItem(
-    val song: Song,
-    val queuePosition: Int
-)
+
 enum class RepeatMode {
     OFF, ONE, ALL
 }
@@ -341,7 +339,6 @@ class MainActivity : ComponentActivity() {
                         albums = albums,
                         artists = artists,
                         playlists = playlists,
-                        folders = folders,
                         favorites = favorites,
                         playlistManager = playlistManager,
                         hasPermission = hasPermission,
@@ -575,7 +572,6 @@ class MainActivity : ComponentActivity() {
         songs.forEach { song ->
             val path = song.uri.path ?: return@forEach
             val folderPath = File(path).parent ?: return@forEach
-            val folderName = File(folderPath).name
 
             if (!folderMap.containsKey(folderPath)) {
                 folderMap[folderPath] = mutableListOf()
@@ -600,7 +596,6 @@ class MainActivity : ComponentActivity() {
         albums: List<Album>,
         artists: List<Artist>,
         playlists: List<Playlist>,
-        folders: List<MusicFolder>,
         hasPermission: Boolean,
         musicPlayer: MusicService,
         imageService: ArtistImageService,
@@ -626,7 +621,43 @@ class MainActivity : ComponentActivity() {
             if (selectedTab == 4) selectedPlaylist = null
             if (selectedTab == 5) selectedFolder = null
         }
-
+        BackHandler(enabled = true) {
+            when {
+                // Si on est dans l'écran de la queue
+                showQueueScreen -> {
+                    showQueueScreen = false
+                }
+                // Si on est dans les paramètres
+                selectedTab == 6 -> {
+                    selectedTab = 0
+                }
+                // Si on visualise un album
+                selectedAlbum != null -> {
+                    selectedAlbum = null
+                }
+                // Si on visualise un artiste
+                selectedArtist != null -> {
+                    selectedArtist = null
+                }
+                // Si on visualise une playlist
+                selectedPlaylist != null -> {
+                    selectedPlaylist = null
+                }
+                // Si on visualise un dossier
+                selectedFolder != null -> {
+                    selectedFolder = null
+                }
+                // Si on est sur l'onglet principal (lecteur), quitter l'app
+                selectedTab == 0 -> {
+                    // Optionnel : afficher un Toast "Appuyez encore pour quitter"
+                    // ou simplement ne rien faire (comportement par défaut Android)
+                }
+                // Sinon, retour à l'onglet principal
+                else -> {
+                    selectedTab = 0
+                }
+            }
+        }
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface, bottomBar = {
                 NavigationBar(
@@ -689,6 +720,7 @@ class MainActivity : ComponentActivity() {
 
                         if (selectedAlbum != null) {
                             val albumSongs = songs.filter { it.albumId == selectedAlbum!!.id }
+                            BackHandler { selectedAlbum = null }
                             AlbumDetailScreen(
                                 album = selectedAlbum!!,
                                 songs = albumSongs,
@@ -714,6 +746,7 @@ class MainActivity : ComponentActivity() {
                         if (selectedArtist != null) {
                             val artistSongs = songs.filter { it.artist == selectedArtist!!.name }
                             val imageService = remember { ArtistImageService(this@MainActivity) }
+                            BackHandler { selectedArtist = null }
                             ArtistDetailScreen(
                                 artist = selectedArtist!!,
                                 songs = artistSongs,
@@ -739,6 +772,8 @@ class MainActivity : ComponentActivity() {
                         if (selectedPlaylist != null) {
                             val playlistSongs =
                                 songs.filter { song -> selectedPlaylist!!.songIds.contains(song.id) }
+
+                            BackHandler { selectedArtist = null }
                             PlaylistDetailScreen(
                                 playlist = selectedPlaylist!!,
                                 songs = playlistSongs,
@@ -799,15 +834,20 @@ class MainActivity : ComponentActivity() {
 //                            )
 //                        }
 //                    }
-                    6 -> SettingsScreen(
-                        settingsManager = settingsManager,
-                        onBack = { selectedTab = 0 },
-                        onForceScan = { forceScanMusic() },
-                        onThemeChanged = { newTheme ->
-                            isDarkThemeState.value = newTheme
-                        },
-                        onRequestPermission = { requestPermission.launch(getPermissionString()) } // ⬅️ LIGNE AJOUTÉE
-                    )
+                    6 -> {
+                        // ✅ AJOUTEZ BackHandler ICI AUSSI
+                        BackHandler { selectedTab = 0 }
+
+                        SettingsScreen(
+                            settingsManager = settingsManager,
+                            onBack = { selectedTab = 0 },
+                            onForceScan = { forceScanMusic() },
+                            onThemeChanged = { newTheme ->
+                                isDarkThemeState.value = newTheme
+                            },
+                            onRequestPermission = { requestPermission.launch(getPermissionString()) }
+                        )
+                    }
                 }
                 if (showQueueScreen) {
                     CurrentQueueScreen(
