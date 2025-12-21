@@ -1,6 +1,7 @@
 package fr.kevw.kenemimusic
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -9,13 +10,23 @@ import java.net.URL
 import java.net.URLEncoder
 
 /**
- * Service pour récupérer les images des artistes via Deezer API
+ * Service pour récupérer les images des artistes via Deezer API avec système de cache
  * Aucune clé API n'est nécessaire !
  */
 class ArtistImageService(private val context: Context) {
 
+    // ===== SYSTÈME DE CACHE =====
+    private val cachePrefs: SharedPreferences =
+        context.getSharedPreferences("artist_image_cache", Context.MODE_PRIVATE)
+
+    companion object {
+        private const val CACHE_PREFIX_ARTIST = "artist_"
+        private const val CACHE_PREFIX_ALBUM = "album_"
+        private const val CACHE_EXPIRY_DAYS = 30 // Cache valide pendant 30 jours
+    }
+
     /**
-     * Récupère l'URL de l'image d'un artiste depuis Deezer
+     * Récupère l'URL de l'image d'un artiste depuis le cache ou l'API Deezer
      * @param artistName Nom de l'artiste
      * @return URL de l'image en haute qualité ou null si non trouvée
      */
@@ -25,8 +36,18 @@ class ArtistImageService(private val context: Context) {
                 return@withContext null
             }
 
-            // Nettoyer le nom de l'artiste (enlever les feat., etc.)
             val cleanArtistName = cleanArtistName(artistName)
+            val cacheKey = CACHE_PREFIX_ARTIST + cleanArtistName.lowercase()
+
+            // ✅ 1. VÉRIFIER LE CACHE D'ABORD
+            val cachedUrl = getCachedImageUrl(cacheKey)
+            if (cachedUrl != null) {
+                Log.d("ArtistImageService", "Image trouvée en cache pour: $cleanArtistName")
+                return@withContext cachedUrl
+            }
+
+            // ✅ 2. SI PAS EN CACHE, TÉLÉCHARGER DEPUIS L'API
+            Log.d("ArtistImageService", "Téléchargement de l'image pour: $cleanArtistName")
             val encodedArtist = URLEncoder.encode(cleanArtistName, "UTF-8")
             val urlString = "https://api.deezer.com/search/artist?q=$encodedArtist&limit=1"
 
@@ -38,20 +59,28 @@ class ArtistImageService(private val context: Context) {
                 if (data.length() > 0) {
                     val artist = data.getJSONObject(0)
 
-                    // Vérifier que c'est bien le bon artiste (correspondance approximative)
+                    // Vérifier que c'est bien le bon artiste
                     val foundArtistName = artist.optString("name", "")
                     if (!isArtistMatch(cleanArtistName, foundArtistName)) {
                         Log.w("ArtistImageService", "Artiste non correspondant: cherché '$cleanArtistName', trouvé '$foundArtistName'")
                         return@withContext null
                     }
 
-                    // Deezer fournit plusieurs tailles d'images, prendre la meilleure qualité
-                    return@withContext when {
+                    // Récupérer l'URL de la meilleure qualité
+                    val imageUrl = when {
                         artist.has("picture_xl") -> artist.getString("picture_xl")
                         artist.has("picture_big") -> artist.getString("picture_big")
                         artist.has("picture_medium") -> artist.getString("picture_medium")
                         else -> null
                     }
+
+                    // ✅ 3. SAUVEGARDER EN CACHE
+                    if (imageUrl != null) {
+                        cacheImageUrl(cacheKey, imageUrl)
+                        Log.d("ArtistImageService", "Image mise en cache pour: $cleanArtistName")
+                    }
+
+                    return@withContext imageUrl
                 }
             }
 
@@ -62,6 +91,176 @@ class ArtistImageService(private val context: Context) {
             return@withContext null
         }
     }
+
+    /**
+     * Récupère l'URL de la pochette d'un album depuis le cache ou l'API Deezer
+     * @param albumName Nom de l'album
+     * @param artistName Nom de l'artiste (pour affiner la recherche)
+     * @return URL de la pochette en haute qualité ou null si non trouvée
+     */
+    suspend fun getAlbumCoverUrl(albumName: String, artistName: String = ""): String? = withContext(Dispatchers.IO) {
+        try {
+            if (albumName.isBlank() || albumName == "Album inconnu") {
+                return@withContext null
+            }
+
+            val cleanAlbumName = albumName.trim()
+            val cleanArtistName = cleanArtistName(artistName)
+            val cacheKey = CACHE_PREFIX_ALBUM + "${cleanAlbumName}_${cleanArtistName}".lowercase()
+
+            // ✅ 1. VÉRIFIER LE CACHE D'ABORD
+            val cachedUrl = getCachedImageUrl(cacheKey)
+            if (cachedUrl != null) {
+                Log.d("ArtistImageService", "Pochette trouvée en cache pour: $cleanAlbumName")
+                return@withContext cachedUrl
+            }
+
+            // ✅ 2. SI PAS EN CACHE, TÉLÉCHARGER DEPUIS L'API
+            Log.d("ArtistImageService", "Téléchargement de la pochette pour: $cleanAlbumName")
+
+            val searchQuery = if (cleanArtistName.isNotBlank()) {
+                "$cleanAlbumName $cleanArtistName"
+            } else {
+                cleanAlbumName
+            }
+
+            val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
+            val urlString = "https://api.deezer.com/search/album?q=$encodedQuery&limit=1"
+
+            val response = URL(urlString).readText()
+            val json = JSONObject(response)
+
+            if (json.has("data")) {
+                val data = json.getJSONArray("data")
+                if (data.length() > 0) {
+                    val album = data.getJSONObject(0)
+
+                    // Récupérer l'URL de la meilleure qualité
+                    val coverUrl = when {
+                        album.has("cover_xl") -> album.getString("cover_xl")
+                        album.has("cover_big") -> album.getString("cover_big")
+                        album.has("cover_medium") -> album.getString("cover_medium")
+                        else -> null
+                    }
+
+                    // ✅ 3. SAUVEGARDER EN CACHE
+                    if (coverUrl != null) {
+                        cacheImageUrl(cacheKey, coverUrl)
+                        Log.d("ArtistImageService", "Pochette mise en cache pour: $cleanAlbumName")
+                    }
+
+                    return@withContext coverUrl
+                }
+            }
+
+            return@withContext null
+
+        } catch (e: Exception) {
+            Log.e("ArtistImageService", "Erreur lors de la récupération de la pochette pour $albumName", e)
+            return@withContext null
+        }
+    }
+
+    // ===== GESTION DU CACHE =====
+
+    /**
+     * Récupère une URL d'image depuis le cache si elle existe et est valide
+     */
+    private fun getCachedImageUrl(key: String): String? {
+        val cachedData = cachePrefs.getString(key, null) ?: return null
+
+        try {
+            val parts = cachedData.split("|")
+            if (parts.size != 2) return null
+
+            val url = parts[0]
+            val timestamp = parts[1].toLongOrNull() ?: return null
+
+            // Vérifier si le cache n'est pas expiré
+            val now = System.currentTimeMillis()
+            val expiryTime = timestamp + (CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000L)
+
+            return if (now < expiryTime) {
+                url
+            } else {
+                // Cache expiré, le supprimer
+                cachePrefs.edit().remove(key).apply()
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("ArtistImageService", "Erreur lors de la lecture du cache", e)
+            return null
+        }
+    }
+
+    /**
+     * Sauvegarde une URL d'image dans le cache avec un timestamp
+     */
+    private fun cacheImageUrl(key: String, url: String) {
+        val timestamp = System.currentTimeMillis()
+        val cachedData = "$url|$timestamp"
+        cachePrefs.edit().putString(key, cachedData).apply()
+    }
+
+    /**
+     * Efface tout le cache des images
+     */
+    fun clearCache() {
+        cachePrefs.edit().clear().apply()
+        Log.d("ArtistImageService", "Cache d'images effacé")
+    }
+
+    /**
+     * Efface les entrées expirées du cache
+     */
+    fun cleanExpiredCache() {
+        val allEntries = cachePrefs.all
+        val now = System.currentTimeMillis()
+        var removedCount = 0
+
+        allEntries.forEach { (key, value) ->
+            if (value is String) {
+                try {
+                    val parts = value.split("|")
+                    if (parts.size == 2) {
+                        val timestamp = parts[1].toLongOrNull() ?: 0L
+                        val expiryTime = timestamp + (CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000L)
+
+                        if (now >= expiryTime) {
+                            cachePrefs.edit().remove(key).apply()
+                            removedCount++
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("ArtistImageService", "Erreur lors du nettoyage du cache", e)
+                }
+            }
+        }
+
+        if (removedCount > 0) {
+            Log.d("ArtistImageService", "$removedCount entrées expirées supprimées du cache")
+        }
+    }
+
+    /**
+     * Retourne la taille du cache (nombre d'entrées)
+     */
+    fun getCacheSize(): Int {
+        return cachePrefs.all.size
+    }
+
+    /**
+     * Vérifie si une image est en cache
+     */
+    fun isImageCached(artistOrAlbumName: String, isArtist: Boolean = true): Boolean {
+        val cleanName = if (isArtist) cleanArtistName(artistOrAlbumName) else artistOrAlbumName.trim()
+        val prefix = if (isArtist) CACHE_PREFIX_ARTIST else CACHE_PREFIX_ALBUM
+        val cacheKey = prefix + cleanName.lowercase()
+
+        return getCachedImageUrl(cacheKey) != null
+    }
+
+    // ===== FONCTIONS UTILITAIRES =====
 
     /**
      * Nettoie le nom de l'artiste pour améliorer les résultats de recherche
@@ -124,56 +323,5 @@ class ArtistImageService(private val context: Context) {
         }
 
         return dp[len1][len2]
-    }
-
-    /**
-     * Récupère l'URL de la pochette d'un album depuis Deezer
-     * @param albumName Nom de l'album
-     * @param artistName Nom de l'artiste (pour affiner la recherche)
-     * @return URL de la pochette en haute qualité ou null si non trouvée
-     */
-    suspend fun getAlbumCoverUrl(albumName: String, artistName: String = ""): String? = withContext(Dispatchers.IO) {
-        try {
-            if (albumName.isBlank() || albumName == "Album inconnu") {
-                return@withContext null
-            }
-
-            val cleanAlbumName = albumName.trim()
-            val cleanArtistName = cleanArtistName(artistName)
-
-            // Recherche combinée album + artiste pour plus de précision
-            val searchQuery = if (cleanArtistName.isNotBlank()) {
-                "$cleanAlbumName $cleanArtistName"
-            } else {
-                cleanAlbumName
-            }
-
-            val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
-            val urlString = "https://api.deezer.com/search/album?q=$encodedQuery&limit=1"
-
-            val response = URL(urlString).readText()
-            val json = JSONObject(response)
-
-            if (json.has("data")) {
-                val data = json.getJSONArray("data")
-                if (data.length() > 0) {
-                    val album = data.getJSONObject(0)
-
-                    // Deezer fournit plusieurs tailles de pochettes
-                    return@withContext when {
-                        album.has("cover_xl") -> album.getString("cover_xl")
-                        album.has("cover_big") -> album.getString("cover_big")
-                        album.has("cover_medium") -> album.getString("cover_medium")
-                        else -> null
-                    }
-                }
-            }
-
-            return@withContext null
-
-        } catch (e: Exception) {
-            Log.e("ArtistImageService", "Erreur lors de la récupération de la pochette pour $albumName", e)
-            return@withContext null
-        }
     }
 }

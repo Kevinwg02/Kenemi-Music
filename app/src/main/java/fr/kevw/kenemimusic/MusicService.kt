@@ -5,8 +5,14 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
@@ -45,13 +51,21 @@ class MusicService : Service() {
     // Pour éviter la reprise automatique
     private var wasPlayingBeforeFocusLoss = false
 
+    // ===== AJOUT : GESTION BLUETOOTH =====
+    private var bluetoothReceiver: BroadcastReceiver? = null
+    private var isBluetoothReceiverRegistered = false
+
+    // ===== AJOUT : GESTION DES ÉCOUTEURS FILAIRES =====
+    private var headsetReceiver: BroadcastReceiver? = null
+    private var isHeadsetReceiverRegistered = false
+
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "music_channel"
         const val ACTION_PLAY_PAUSE = "ACTION_PLAY_PAUSE"
         const val ACTION_NEXT = "ACTION_NEXT"
         const val ACTION_PREVIOUS = "ACTION_PREVIOUS"
-        const val ACTION_STOP = "ACTION_STOP" // AJOUTÉ
+        const val ACTION_STOP = "ACTION_STOP"
     }
 
     inner class MusicBinder : Binder() {
@@ -65,6 +79,89 @@ class MusicService : Service() {
         createNotificationChannel()
         setupMediaSession()
         setupAudioManager()
+        setupBluetoothReceiver() // ✅ AJOUT
+        setupHeadsetReceiver() // ✅ AJOUT
+    }
+
+    // ===== AJOUT : CONFIGURATION DU RECEIVER BLUETOOTH =====
+    private fun setupBluetoothReceiver() {
+        bluetoothReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                        // Déconnexion Bluetooth détectée
+                        android.util.Log.d("MusicService", "Bluetooth déconnecté - Pause de la musique")
+                        if (isPlaying) {
+                            pause()
+                        }
+                    }
+                    BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                        val state = intent.getIntExtra(
+                            BluetoothAdapter.EXTRA_STATE,
+                            BluetoothAdapter.ERROR
+                        )
+                        if (state == BluetoothAdapter.STATE_OFF || state == BluetoothAdapter.STATE_TURNING_OFF) {
+                            // Bluetooth désactivé
+                            android.util.Log.d("MusicService", "Bluetooth désactivé - Pause de la musique")
+                            if (isPlaying) {
+                                pause()
+                            }
+                        }
+                    }
+                    AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED -> {
+                        val state = intent.getIntExtra(
+                            AudioManager.EXTRA_SCO_AUDIO_STATE,
+                            AudioManager.SCO_AUDIO_STATE_ERROR
+                        )
+                        if (state == AudioManager.SCO_AUDIO_STATE_DISCONNECTED) {
+                            android.util.Log.d("MusicService", "Audio Bluetooth déconnecté - Pause")
+                            if (isPlaying) {
+                                pause()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+            addAction(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED)
+        }
+
+        try {
+            registerReceiver(bluetoothReceiver, filter)
+            isBluetoothReceiverRegistered = true
+            android.util.Log.d("MusicService", "Bluetooth receiver enregistré")
+        } catch (e: Exception) {
+            android.util.Log.e("MusicService", "Erreur lors de l'enregistrement du Bluetooth receiver", e)
+        }
+    }
+
+    // ===== AJOUT : CONFIGURATION DU RECEIVER ÉCOUTEURS FILAIRES =====
+    private fun setupHeadsetReceiver() {
+        headsetReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                    // Écouteurs débranchés ou autre perturbation audio
+                    android.util.Log.d("MusicService", "Écouteurs débranchés - Pause de la musique")
+                    if (isPlaying) {
+                        pause()
+                    }
+                }
+            }
+        }
+
+        val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+
+        try {
+            registerReceiver(headsetReceiver, filter)
+            isHeadsetReceiverRegistered = true
+            android.util.Log.d("MusicService", "Headset receiver enregistré")
+        } catch (e: Exception) {
+            android.util.Log.e("MusicService", "Erreur lors de l'enregistrement du Headset receiver", e)
+        }
     }
 
     private fun setupMediaSession() {
@@ -96,7 +193,6 @@ class MusicService : Service() {
                 }
 
                 override fun onStop() {
-                    // MODIFIÉ : Arrêt complet au lieu de pause
                     stopPlayback()
                 }
             })
@@ -109,29 +205,21 @@ class MusicService : Service() {
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
     }
 
-    // MODIFIÉ : Gestion améliorée du focus audio
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
             AudioManager.AUDIOFOCUS_LOSS -> {
-                // Perte définitive du focus (ex: un appel arrive)
                 wasPlayingBeforeFocusLoss = false
                 pause()
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                // Perte temporaire (ex: notification, vidéo Instagram)
-                // On sauvegarde l'état mais on NE reprend PAS automatiquement
                 wasPlayingBeforeFocusLoss = isPlaying
                 pause()
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                // Son en arrière-plan autorisé (ex: GPS)
                 mediaPlayer?.setVolume(0.3f, 0.3f)
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
-                // On récupère le focus
                 mediaPlayer?.setVolume(1.0f, 1.0f)
-                // MODIFIÉ : On NE reprend PAS automatiquement
-                // L'utilisateur doit appuyer sur play manuellement
             }
         }
     }
@@ -183,7 +271,7 @@ class MusicService : Service() {
                         PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
                         PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
                         PlaybackStateCompat.ACTION_SEEK_TO or
-                        PlaybackStateCompat.ACTION_STOP // AJOUTÉ
+                        PlaybackStateCompat.ACTION_STOP
             )
             .build()
 
@@ -197,7 +285,7 @@ class MusicService : Service() {
             }
             ACTION_NEXT -> playNext()
             ACTION_PREVIOUS -> playPrevious()
-            ACTION_STOP -> stopPlayback() // AJOUTÉ
+            ACTION_STOP -> stopPlayback()
         }
         return START_STICKY
     }
@@ -241,7 +329,6 @@ class MusicService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        // AJOUTÉ : Intent pour fermer complètement
         val stopIntent = PendingIntent.getService(
             this, 4,
             Intent(this, MusicService::class.java).setAction(ACTION_STOP),
@@ -260,15 +347,13 @@ class MusicService : Service() {
                 playPauseIntent
             )
             .addAction(android.R.drawable.ic_media_next, "Suivant", nextIntent)
-            // AJOUTÉ : Bouton de fermeture dans la notification étendue
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Fermer", stopIntent)
             .setStyle(MediaStyle()
                 .setShowActionsInCompactView(0, 1, 2)
                 .setMediaSession(mediaSession.sessionToken))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOnlyAlertOnce(true)
-            .setOngoing(isPlaying) // La notification peut être balayée si en pause
-            // AJOUTÉ : Action de suppression
+            .setOngoing(isPlaying)
             .setDeleteIntent(stopIntent)
             .build()
     }
@@ -342,7 +427,6 @@ class MusicService : Service() {
         mediaPlayer?.pause()
         isPlaying = false
         updatePlaybackState()
-        // MODIFIÉ : Notification non-ongoing quand en pause (peut être balayée)
         startForeground(NOTIFICATION_ID, buildNotification())
         onStateChanged?.invoke()
     }
@@ -357,12 +441,11 @@ class MusicService : Service() {
         onStateChanged?.invoke()
     }
 
-    // AJOUTÉ : Fonction pour arrêter complètement le service
     fun stopPlayback() {
         pause()
         abandonAudioFocus()
-        stopForeground(true) // Supprime la notification
-        stopSelf() // Arrête le service
+        stopForeground(true)
+        stopSelf()
     }
 
     fun playNext() {
@@ -446,9 +529,32 @@ class MusicService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        // ✅ AJOUT : DÉSENREGISTRER LES RECEIVERS
+        try {
+            if (isBluetoothReceiverRegistered) {
+                unregisterReceiver(bluetoothReceiver)
+                isBluetoothReceiverRegistered = false
+                android.util.Log.d("MusicService", "Bluetooth receiver désenregistré")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicService", "Erreur lors du désenregistrement du Bluetooth receiver", e)
+        }
+
+        try {
+            if (isHeadsetReceiverRegistered) {
+                unregisterReceiver(headsetReceiver)
+                isHeadsetReceiverRegistered = false
+                android.util.Log.d("MusicService", "Headset receiver désenregistré")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicService", "Erreur lors du désenregistrement du Headset receiver", e)
+        }
+
         mediaSession.release()
         release()
     }
+
     fun getCurrentPlaylist(): List<Song> = playlist.toList()
 
     fun updatePlaylist(newPlaylist: List<Song>) {
@@ -459,10 +565,8 @@ class MusicService : Service() {
         playlistVersion++
     }
 
-    // AJOUTÉ : Gérer la tâche supprimée de la liste des tâches récentes
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        // Quand l'app est fermée en glissant vers le haut
         stopPlayback()
     }
 }
