@@ -30,16 +30,6 @@ If you'd like to help, contributions are warmly welcome.
 
 </p>
 
-
-<img width="452" height="954" alt="image" src="https://github.com/user-attachments/assets/4a62cc9c-30cd-47d6-a1bd-27df7e9c85d3" />
-<img width="452" height="954" alt="image" src="https://github.com/user-attachments/assets/8e056100-5e9b-4883-b9ad-e0ed1d4041f1" />
-<img width="452" height="954" alt="image" src="https://github.com/user-attachments/assets/91563076-f76d-48ce-9902-c93366e057ee" />
-<img width="452" height="954" alt="image" src="https://github.com/user-attachments/assets/1e37911f-90c8-4618-a440-f2490c385762" />
-<img width="452" height="954" alt="image" src="https://github.com/user-attachments/assets/704f9b31-2928-4189-b692-67ae4e7dd274" />
-<img width="452" height="954" alt="image" src="https://github.com/user-attachments/assets/7fab7d6a-c16f-4a16-8f24-035c088504a8" />
-
-
-
 <h2>Features (EN)</h2>
 
 <h3>📂 Music Library</h3>
@@ -78,77 +68,3 @@ If you'd like to help, contributions are warmly welcome.
   <li>Fetched via a dedicated image service</li>
   <li>Locally cached for improved performance</li>
 </ul>
-
-
-<h2>Résumé (FR)</h2>
-<p>
-KenemiMusic est un lecteur audio moderne, fluide et 100% local.  
-Il analyse automatiquement les fichiers musicaux présents sur l’appareil et organise la bibliothèque en
-chansons, albums, artistes, playlists et dossiers. L’application est entièrement sans publicité et ne
-collecte aucune donnée.
-</p>
-
-<p>
-J’en avais franchement marre de voir que quasiment tous les lecteurs audio Android sont devenus bourrés de pubs…
-Alors j’ai décidé de créer le mien, en utilisant Material3 et Jetpack Compose.
-</p>
-
-<p>
-Le projet est encore en développement, mais voici déjà ce qui est disponible :
-</p>
-
-<ul>
-  <li>Détection automatique des fichiers audio</li>
-  <li>Actions sur les pistes : lecture, pause, suivant, précédent, boucle, boucle de playlist</li>
-  <li>Onglets dédiés : lecteur, titres, albums, artistes, playlists, dossiers</li>
-  <li>Mini-lecteur dans la barre de notification</li>
-</ul>
-
-<p>
-L’interface, conçue avec Jetpack Compose, offre une expérience rapide et cohérente sur tous les appareils.
-Le lecteur fonctionne en arrière-plan grâce à un <strong>MusicService</strong> dédié, avec contrôle complet via la notification.
-</p>
-
-<h2>Fonctionnalités (FR)</h2>
-
-<h3>📂 Bibliothèque musicale</h3>
-<ul>
-  <li>Scan automatique des fichiers audio</li>
-  <li>Affichage par chansons, albums, artistes, playlists et dossiers</li>
-  <li>Chargement rapide, sans dépendance cloud</li>
-</ul>
-
-<h3>🎵 Lecteur audio</h3>
-<ul>
-  <li>Lecture, pause, suivant, précédent</li>
-  <li>Boucle d’un titre ou de toute la playlist</li>
-  <li>Lecture en arrière-plan via un service</li>
-  <li>Contrôles via la notification système</li>
-  <li>Reprise instantanée après navigation</li>
-</ul>
-
-<h3>🎨 Interface</h3>
-<ul>
-  <li>UI entièrement en Jetpack Compose</li>
-  <li>Navigation par onglets intuitive</li>
-  <li>Fiches détaillées pour albums et artistes</li>
-</ul>
-
-<h3>🎧 Playlists</h3>
-<ul>
-  <li>Créer, modifier, supprimer</li>
-  <li>Ajouter ou retirer des titres</li>
-  <li>Lecture complète ou par titre</li>
-</ul>
-
-<h3>🖼️ Images d'artistes</h3>
-<ul>
-  <li>Récupération via un service dédié</li>
-  <li>Mise en cache locale pour de meilleures performances</li>
-</ul>
-
-<hr/>
-
-<p>
-Si vous souhaitez m’aider, toute contribution est la bienvenue.
-</p>
