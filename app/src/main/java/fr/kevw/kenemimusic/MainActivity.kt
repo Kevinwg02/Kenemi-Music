@@ -2070,7 +2070,7 @@ fun SongListScreen(
     val currentSong = musicPlayer.currentSong
     val isPlaying = musicPlayer.isPlaying
 
-    // AJOUTÉ : Scroll automatique vers la chanson en cours au premier affichage
+    //  Scroll automatique vers la chanson en cours au premier affichage
     var hasScrolledToCurrentSong by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentSong, filteredSongs) {

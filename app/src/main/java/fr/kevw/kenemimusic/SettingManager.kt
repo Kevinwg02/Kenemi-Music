@@ -1,5 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package fr.kevw.kenemimusic
+
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -53,11 +54,19 @@ fun SettingsScreen(
     onRequestPermission: () -> Unit
 ) {
     val context = LocalContext.current
+    val imageService = remember { ArtistImageService(context) } // ✅ AJOUTÉ
     var isDarkTheme by remember { mutableStateOf(settingsManager.isDarkTheme) }
     var autoScanOnStart by remember { mutableStateOf(settingsManager.autoScanOnStart) }
     var highQualityImages by remember { mutableStateOf(settingsManager.highQualityImages) }
     var isScanning by remember { mutableStateOf(false) }
+    var cacheSize by remember { mutableStateOf(0) } // ✅ AJOUTÉ
+    var showClearCacheDialog by remember { mutableStateOf(false) } // ✅ AJOUTÉ
     val scope = rememberCoroutineScope()
+
+    // ✅ AJOUTÉ : Charger la taille du cache au démarrage
+    LaunchedEffect(Unit) {
+        cacheSize = imageService.getCacheSize()
+    }
 
     // Vérifier les permissions en temps réel
     var hasAudioPermission by remember {
@@ -138,7 +147,6 @@ fun SettingsScreen(
                             if (!hasAudioPermission) {
                                 onRequestPermission()
                             } else {
-                                // Ouvrir les paramètres de l'app
                                 openAppSettings(context)
                             }
                         }
@@ -428,6 +436,41 @@ fun SettingsScreen(
                 HorizontalDivider()
             }
 
+            // ✅ AJOUTÉ : Vider le cache des images
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showClearCacheDialog = true
+                        }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Vider le cache des images", fontWeight = FontWeight.Medium)
+                        Text(
+                            text = "$cacheSize image${if (cacheSize > 1) "s" else ""} en cache",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                HorizontalDivider()
+            }
+
             // SECTION À PROPOS
             item {
                 Text(
@@ -439,7 +482,8 @@ fun SettingsScreen(
                 )
             }
 
-            // Version de l'app
+
+            // Développeur
             item {
                 Row(
                     modifier = Modifier
@@ -448,23 +492,56 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Info,
+                        imageVector = Icons.Default.Person,
                         contentDescription = null,
                         modifier = Modifier.size(24.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Version", fontWeight = FontWeight.Medium)
+                        Text("Version by Kevinwg02", fontWeight = FontWeight.Medium)
                         Text(
-                            text = "25.12.14",
+                            text = "25.12.21",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
                     }
                 }
             }
         }
+    }
+
+    // ✅ AJOUTÉ : Dialog de confirmation pour vider le cache
+    if (showClearCacheDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheDialog = false },
+            title = { Text("Vider le cache ?") },
+            text = {
+                Text("Cela supprimera toutes les images en cache ($cacheSize image${if (cacheSize > 1) "s" else ""}). Elles seront retéléchargées lors de leur prochaine utilisation.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            imageService.clearCache()
+                            cacheSize = 0
+                            showClearCacheDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Vider")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearCacheDialog = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
     }
 }
 
