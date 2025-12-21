@@ -253,6 +253,8 @@ class MainActivity : ComponentActivity() {
     private var musicService: MusicService? by mutableStateOf(null)
     private var serviceBound = false
     private var showQueueScreen by mutableStateOf(false)
+    private var showLyricsScreen by mutableStateOf(false)
+    private lateinit var lyricsService: LyricsService
     private lateinit var playlistManager: PlaylistManager
     private lateinit var settingsManager: SettingsManager
 
@@ -299,6 +301,7 @@ class MainActivity : ComponentActivity() {
 
         playlistManager = PlaylistManager(this)
         settingsManager = SettingsManager(this)
+        lyricsService = LyricsService(this)
         playlists.addAll(playlistManager.loadPlaylists())
         favorites.addAll(playlistManager.loadFavorites())
 
@@ -345,7 +348,7 @@ class MainActivity : ComponentActivity() {
                         imageService = imageService,
                         musicPlayer = player,
                         isDarkThemeState = isDarkTheme,
-
+                        lyricsService = lyricsService,
                         onRequestPermission = { requestPermission.launch(getPermissionString()) },
                         // Sauvegarder lors de la création
                         onCreatePlaylist = { name, songIds ->
@@ -383,7 +386,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
     }
 
 
@@ -602,6 +604,7 @@ class MainActivity : ComponentActivity() {
         isDarkThemeState: MutableState<Boolean>,
         favorites: List<Long>,
         playlistManager: PlaylistManager,
+        lyricsService: LyricsService,
         onRequestPermission: () -> Unit,
         onCreatePlaylist: (String, List<Long>) -> Unit,
         onDeletePlaylist: (Playlist) -> Unit,
@@ -702,7 +705,8 @@ class MainActivity : ComponentActivity() {
                         musicPlayer = musicPlayer,
                         imageService = imageService,
                         favorites = favorites,
-                        onToggleFavorite = onToggleFavorite
+                        onToggleFavorite = onToggleFavorite,
+                        onShowLyrics = { showLyricsScreen = true }
                     )
 
                     1 -> SongListScreen(
@@ -848,7 +852,31 @@ class MainActivity : ComponentActivity() {
                             onRequestPermission = { requestPermission.launch(getPermissionString()) }
                         )
                     }
+
                 }
+
+
+                if (showQueueScreen) {
+                    CurrentQueueScreen(
+                        musicPlayer = musicPlayer,
+                        onBack = { showQueueScreen = false },
+                        onReorder = { fromIndex, toIndex ->
+                            val currentPlaylist = musicPlayer.getCurrentPlaylist().toMutableList()
+                            val item = currentPlaylist.removeAt(fromIndex)
+                            currentPlaylist.add(toIndex, item)
+                            musicPlayer.updatePlaylist(currentPlaylist)
+                        }
+                    )
+                }
+                // ✅ ÉCRAN DES PAROLES
+                if (showLyricsScreen && musicPlayer.currentSong != null) {
+                    LyricsScreen(
+                        song = musicPlayer.currentSong!!,
+                        lyricsService = lyricsService,
+                        onBack = { showLyricsScreen = false }
+                    )
+                }
+
                 if (showQueueScreen) {
                     CurrentQueueScreen(
                         musicPlayer = musicPlayer,
@@ -1797,7 +1825,8 @@ class MainActivity : ComponentActivity() {
         musicPlayer: MusicService,
         imageService: ArtistImageService,
         favorites: List<Long>,
-        onToggleFavorite: (Long) -> Unit
+        onToggleFavorite: (Long) -> Unit,
+        onShowLyrics: () -> Unit
     ) {
         val currentSong = musicPlayer.currentSong
         val isPlaying = musicPlayer.isPlaying
@@ -1921,6 +1950,17 @@ class MainActivity : ComponentActivity() {
                             Icon(
                                 imageVector = Icons.Default.QueueMusic,
                                 contentDescription = "Liste de lecture"
+                            )
+                        }
+                        // ✅ BOUTON PAROLES (CENTRE)
+                        FilledTonalIconButton(
+                            onClick = onShowLyrics,
+                            modifier = Modifier.size(40.dp),
+                            enabled = currentSong != null
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = "Voir les paroles"
                             )
                         }
                         // --- BOUTON FAVORI (DROITE) ---
