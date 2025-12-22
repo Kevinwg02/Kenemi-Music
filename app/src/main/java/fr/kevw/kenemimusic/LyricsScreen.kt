@@ -5,17 +5,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+
+sealed interface LyricsUiState {
+    object Loading : LyricsUiState
+    data class Success(val lyrics: String) : LyricsUiState
+    object Error : LyricsUiState
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,28 +28,20 @@ fun LyricsScreen(
     lyricsService: LyricsService,
     onBack: () -> Unit
 ) {
-    var lyrics by remember { mutableStateOf<String?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var hasError by remember { mutableStateOf(false) }
+    var uiState by remember { mutableStateOf<LyricsUiState>(LyricsUiState.Loading) }
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
-    // Charger les paroles au démarrage
-    LaunchedEffect(song.id) {
-        isLoading = true
-        hasError = false
-
+    fun loadLyrics() {
         scope.launch {
-            try {
-                val fetchedLyrics = lyricsService.getLyrics(song.title, song.artist)
-                lyrics = fetchedLyrics
-                hasError = fetchedLyrics == null
-            } catch (e: Exception) {
-                hasError = true
-            } finally {
-                isLoading = false
-            }
+            uiState = LyricsUiState.Loading
+            val lyrics = lyricsService.getLyrics(song.title, song.artist)
+            uiState = lyrics?.let { LyricsUiState.Success(it) } ?: LyricsUiState.Error
         }
+    }
+
+    LaunchedEffect(song.id) {
+        loadLyrics()
     }
 
     Scaffold(
@@ -53,154 +49,123 @@ fun LyricsScreen(
             TopAppBar(
                 title = {
                     Column {
+                        Text(song.title, maxLines = 1)
                         Text(
-                            text = song.title,
-                            maxLines = 1,
-                            fontSize = 18.sp
-                        )
-                        Text(
-                            text = song.artist,
-                            fontSize = 14.sp,
+                            song.artist,
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Retour")
+                        Icon(Icons.Default.ArrowBack, contentDescription = null)
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                }
             )
         }
     ) { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(padding),
+            contentAlignment = Alignment.Center
         ) {
-            when {
-                // Chargement
-                isLoading -> {
+            when (uiState) {
+
+                // 🔄 Loading
+                LyricsUiState.Loading -> {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        CircularProgressIndicator()
+                        Spacer(Modifier.height(16.dp))
                         Text(
-                            text = "Recherche des paroles...",
-                            fontSize = 16.sp,
+                            "Fetching lyrics…",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                // Erreur / Non trouvé
-                hasError || lyrics == null -> {
+                // ❌ Error
+                LyricsUiState.Error -> {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        modifier = Modifier.padding(32.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Error,
+                            Icons.Default.ErrorOutline,
                             contentDescription = null,
-                            modifier = Modifier.size(80.dp),
+                            modifier = Modifier.size(64.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(Modifier.height(16.dp))
                         Text(
-                            text = "Paroles non disponibles",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
+                            "Lyrics unavailable",
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            text = "Impossible de trouver les paroles pour cette chanson.",
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
+                            "This song doesn’t have lyrics available right now.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(
-                            onClick = {
-                                // Réessayer
-                                scope.launch {
-                                    isLoading = true
-                                    hasError = false
-                                    val fetchedLyrics = lyricsService.getLyrics(song.title, song.artist)
-                                    lyrics = fetchedLyrics
-                                    hasError = fetchedLyrics == null
-                                    isLoading = false
-                                }
-                            }
-                        ) {
-                            Text("Réessayer")
+                        Spacer(Modifier.height(24.dp))
+                        FilledTonalButton(onClick = ::loadLyrics) {
+                            Text("Try again")
                         }
                     }
                 }
 
-                // Afficher les paroles
-                else -> {
+                // 🎵 Success
+                is LyricsUiState.Success -> {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(scrollState)
                             .padding(24.dp)
                     ) {
-                        // En-tête avec icône
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 24.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Surface(
+                            tonalElevation = 2.dp,
+                            shape = MaterialTheme.shapes.large,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                modifier = Modifier.size(32.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "Paroles",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Column(modifier = Modifier.padding(24.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.MusicNote,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "Lyrics",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                }
+
+                                Spacer(Modifier.height(16.dp))
+
+                                Text(
+                                    text = uiState.let { (it as LyricsUiState.Success).lyrics },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
+                                )
+                            }
                         }
 
-                        HorizontalDivider(
-                            modifier = Modifier.padding(bottom = 24.dp)
-                        )
+                        Spacer(Modifier.height(24.dp))
 
-                        // Paroles
                         Text(
-                            text = lyrics ?: "",
-                            fontSize = 16.sp,
-                            lineHeight = 24.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(32.dp))
-
-                        // Note de bas de page
-                        Text(
-                            text = "Paroles fournies par Lyrics.ovh",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            "Lyrics provided by Lyrics.ovh",
+                            modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
