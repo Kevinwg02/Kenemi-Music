@@ -624,6 +624,15 @@ class MainActivity : ComponentActivity() {
             if (selectedTab == 4) selectedPlaylist = null
             if (selectedTab == 5) selectedFolder = null
         }
+        LaunchedEffect(selectedTab) {
+            if (selectedTab == 2) selectedAlbum = null
+            if (selectedTab == 3) selectedArtist = null
+            if (selectedTab == 4) selectedPlaylist = null
+            if (selectedTab == 5) selectedFolder = null
+
+            showLyricsScreen = false
+            showQueueScreen = false
+        }
         BackHandler(enabled = true) {
             when {
                 // Si on est dans l'écran de la queue
@@ -854,6 +863,29 @@ class MainActivity : ComponentActivity() {
                     }
 
                 }
+                // ✅ ÉCRAN DES PAROLES (avec fermeture automatique)
+                if (showLyricsScreen && musicPlayer.currentSong != null) {
+                    LyricsScreen(
+                        song = musicPlayer.currentSong!!,
+                        lyricsService = lyricsService,
+                        imageService = imageService,
+                        onBack = { showLyricsScreen = false }
+                    )
+                }
+
+                // ÉCRAN DE LA QUEUE
+                if (showQueueScreen) {
+                    CurrentQueueScreen(
+                        musicPlayer = musicPlayer,
+                        onBack = { showQueueScreen = false },
+                        onReorder = { fromIndex, toIndex ->
+                            val currentPlaylist = musicPlayer.getCurrentPlaylist().toMutableList()
+                            val item = currentPlaylist.removeAt(fromIndex)
+                            currentPlaylist.add(toIndex, item)
+                            musicPlayer.updatePlaylist(currentPlaylist)
+                        }
+                    )
+                }
 
 
                 if (showQueueScreen) {
@@ -868,11 +900,12 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
-                // ✅ ÉCRAN DES PAROLES
+
                 if (showLyricsScreen && musicPlayer.currentSong != null) {
                     LyricsScreen(
                         song = musicPlayer.currentSong!!,
                         lyricsService = lyricsService,
+                        imageService = imageService,
                         onBack = { showLyricsScreen = false }
                     )
                 }
