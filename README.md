@@ -250,13 +250,6 @@ git clone https://github.com/Kevinwg02/Kenemi-Music.git
 4. 📤 Push sur la branche (`git push origin feature/amazing-feature`)
 5. 🎉 Ouvre une Pull Request
 
----
-
-## 📄 Licence
-
-Ce projet est sous licence **MIT** - voir le fichier [LICENSE](LICENSE) pour plus de détails.
-
----
 
 <div align="center">
 
