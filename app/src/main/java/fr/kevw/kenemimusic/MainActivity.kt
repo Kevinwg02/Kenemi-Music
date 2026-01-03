@@ -2151,6 +2151,8 @@ private fun formatDuration(ms: Long): String {
     val minutes = (ms / (1000 * 60)) % 60
     return String.format("%d:%02d", minutes, seconds)
 }
+
+
 @Composable
 fun SongListScreen(
     songs: List<Song>,
@@ -2161,14 +2163,17 @@ fun SongListScreen(
 ) {
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
+
+    // Filtrage optimisé avec mémorisation
     val filteredSongs = remember(songs, searchQuery) {
         if (searchQuery.isBlank()) {
             songs
         } else {
+            val query = searchQuery.lowercase()
             songs.filter { song ->
-                song.title.contains(searchQuery, ignoreCase = true) ||
-                        song.artist.contains(searchQuery, ignoreCase = true) ||
-                        song.album.contains(searchQuery, ignoreCase = true)
+                song.title.lowercase().contains(query) ||
+                        song.artist.lowercase().contains(query) ||
+                        song.album.lowercase().contains(query)
             }
         }
     }
@@ -2176,40 +2181,48 @@ fun SongListScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val alphabet = remember { generateAlphabet() }
+
+    // Groupage optimisé avec mémorisation
     val groupedSongs = remember(filteredSongs) {
         filteredSongs.groupByFirstLetter { it.title }
+    }
+
+    // ✅ PRÉ-CALCUL DES INDEX POUR CHAQUE LETTRE (OPTIMISATION CRITIQUE)
+    val letterIndexMap = remember(groupedSongs) {
+        val map = mutableMapOf<String, Int>()
+        var currentIndex = 0
+        groupedSongs.forEach { (letter, songsInGroup) ->
+            map[letter] = currentIndex
+            currentIndex += songsInGroup.size + 1 // +1 pour le header
+        }
+        map
     }
 
     val currentSong = musicPlayer.currentSong
     val isPlaying = musicPlayer.isPlaying
 
-    //  Scroll automatique vers la chanson en cours au premier affichage
+    // Scroll automatique optimisé
     var hasScrolledToCurrentSong by remember { mutableStateOf(false) }
-
     LaunchedEffect(currentSong, filteredSongs) {
         if (currentSong != null && !hasScrolledToCurrentSong && filteredSongs.isNotEmpty()) {
             val currentSongIndex = filteredSongs.indexOfFirst { it.id == currentSong.id }
             if (currentSongIndex >= 0) {
-                // Calculer l'index réel en tenant compte des headers
                 var scrollIndex = 0
                 for ((letter, songsInGroup) in groupedSongs) {
                     val indexInGroup = songsInGroup.indexOfFirst { it.id == currentSong.id }
                     if (indexInGroup >= 0) {
-                        scrollIndex += indexInGroup + 1 // +1 pour le header
+                        scrollIndex += indexInGroup + 1
                         break
                     }
-                    scrollIndex += songsInGroup.size + 1 // +1 pour le header
+                    scrollIndex += songsInGroup.size + 1
                 }
-
-                // Scroll avec un petit délai pour s'assurer que la liste est prête
                 delay(100)
-                listState.animateScrollToItem(scrollIndex.coerceAtLeast(0))
+                listState.scrollToItem(scrollIndex.coerceAtLeast(0))
                 hasScrolledToCurrentSong = true
             }
         }
     }
 
-    // AJOUTÉ : Réinitialiser le flag quand on change d'onglet
     LaunchedEffect(Unit) {
         hasScrolledToCurrentSong = false
     }
@@ -2330,22 +2343,16 @@ fun SongListScreen(
                     }
                 }
 
+                // ✅ FASTSCROLLER OPTIMISÉ AVEC SCROLL INSTANTANÉ
                 FastScroller(
                     alphabet = alphabet,
                     onLetterSelected = { letter ->
                         scope.launch {
-                            val targetIndex = filteredSongs.indexOfFirst {
-                                it.title.firstLetterOrHash() == letter
-                            }
-                            if (targetIndex >= 0) {
-                                var scrollIndex = 0
-                                for ((key, group) in groupedSongs) {
-                                    if (key == letter) {
-                                        listState.animateScrollToItem(scrollIndex)
-                                        break
-                                    }
-                                    scrollIndex += group.size + 1
-                                }
+                            // Utiliser la map pré-calculée pour un scroll instantané
+                            val targetIndex = letterIndexMap[letter]
+                            if (targetIndex != null) {
+                                // scrollToItem au lieu de animateScrollToItem = BEAUCOUP plus rapide
+                                listState.scrollToItem(targetIndex)
                             }
                         }
                     },
@@ -2369,12 +2376,23 @@ fun AlbumsScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val alphabet = remember { generateAlphabet() }
+
     val groupedAlbums = remember(albums) {
         albums.groupByFirstLetter { it.name }
     }
 
-    Scaffold { padding ->
+    // ✅ PRÉ-CALCUL DES INDEX
+    val letterIndexMap = remember(groupedAlbums) {
+        val map = mutableMapOf<String, Int>()
+        var currentIndex = 0
+        groupedAlbums.forEach { (letter, albumsInGroup) ->
+            map[letter] = currentIndex
+            currentIndex += albumsInGroup.size + 1
+        }
+        map
+    }
 
+    Scaffold { padding ->
         if (!hasPermission) {
             PermissionRequiredMessage(
                 icon = Icons.Default.Album,
@@ -2437,18 +2455,12 @@ fun AlbumsScreen(
                     }
                 }
 
+                // ✅ SCROLL INSTANTANÉ
                 FastScroller(
                     alphabet = alphabet,
                     onLetterSelected = { letter ->
                         scope.launch {
-                            var scrollIndex = 0
-                            for ((key, group) in groupedAlbums) {
-                                if (key == letter) {
-                                    listState.animateScrollToItem(scrollIndex)
-                                    break
-                                }
-                                scrollIndex += group.size + 1
-                            }
+                            letterIndexMap[letter]?.let { listState.scrollToItem(it) }
                         }
                     },
                     modifier = Modifier
@@ -2459,7 +2471,6 @@ fun AlbumsScreen(
         }
     }
 }
-
 @Composable
 fun SongItem(
     song: Song,
@@ -2674,7 +2685,6 @@ fun AlbumItem(
         )
     }
 }
-
 @Composable
 fun ArtistsScreen(
     artists: List<Artist>,
@@ -2687,14 +2697,23 @@ fun ArtistsScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val alphabet = remember { generateAlphabet() }
+
     val groupedArtists = remember(artists) {
         artists.groupByFirstLetter { it.name }
     }
 
-    Scaffold(
-        topBar = { }
-    ) { padding ->
-        // ⬇️ AJOUTÉ : Message si pas de permission
+    // ✅ PRÉ-CALCUL DES INDEX
+    val letterIndexMap = remember(groupedArtists) {
+        val map = mutableMapOf<String, Int>()
+        var currentIndex = 0
+        groupedArtists.forEach { (letter, _) ->
+            map[letter] = currentIndex
+            currentIndex += 2 // header + grid
+        }
+        map
+    }
+
+    Scaffold(topBar = {}) { padding ->
         if (!hasPermission) {
             PermissionRequiredMessage(
                 icon = Icons.Default.Person,
@@ -2771,18 +2790,12 @@ fun ArtistsScreen(
                     }
                 }
 
+                // ✅ SCROLL INSTANTANÉ
                 FastScroller(
                     alphabet = alphabet,
                     onLetterSelected = { letter ->
                         scope.launch {
-                            var scrollIndex = 0
-                            for ((key, group) in groupedArtists) {
-                                if (key == letter) {
-                                    listState.animateScrollToItem(scrollIndex)
-                                    break
-                                }
-                                scrollIndex += 2
-                            }
+                            letterIndexMap[letter]?.let { listState.scrollToItem(it) }
                         }
                     },
                     modifier = Modifier

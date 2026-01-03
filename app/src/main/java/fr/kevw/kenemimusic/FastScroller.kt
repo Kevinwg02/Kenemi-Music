@@ -1,9 +1,11 @@
 package fr.kevw.kenemimusic
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -13,18 +15,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
-
-
 /**
- * Composant FastScroller pour navigation alphabétique rapide
+ * Composant FastScroller optimisé pour navigation alphabétique ultra-rapide
  */
 @Composable
 fun FastScroller(
@@ -35,39 +36,43 @@ fun FastScroller(
     var isDragging by remember { mutableStateOf(false) }
     var selectedLetter by remember { mutableStateOf<String?>(null) }
     var scrollerHeight by remember { mutableStateOf(0f) }
-    var scrollerTop by remember { mutableStateOf(0f) }
+    val haptic = LocalHapticFeedback.current
+    var lastSelectedIndex by remember { mutableStateOf(-1) }
 
-    LaunchedEffect(isDragging) {
-        if (!isDragging) {
-            delay(1000)
+    // Auto-masquage après inactivité
+    LaunchedEffect(isDragging, selectedLetter) {
+        if (!isDragging && selectedLetter != null) {
+            delay(1500)
             selectedLetter = null
+            lastSelectedIndex = -1
         }
     }
 
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .padding(end = 8.dp)
+            .width(48.dp)
+            .padding(end = 4.dp)
     ) {
-        // Indicateur de lettre au centre
+        // Bulle d'indication de lettre (plus grande et plus visible)
         AnimatedVisibility(
             visible = selectedLetter != null,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(animationSpec = tween(100)),
+            exit = fadeOut(animationSpec = tween(200)),
             modifier = Modifier.align(Alignment.Center)
         ) {
             selectedLetter?.let { letter ->
                 Box(
                     modifier = Modifier
-                        .offset(x = (-80).dp)
-                        .size(60.dp)
+                        .offset(x = (-70).dp)
+                        .size(64.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = letter,
-                        fontSize = 24.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimary
                     )
@@ -75,29 +80,52 @@ fun FastScroller(
             }
         }
 
-        // Liste des lettres
+        // Barre alphabétique
         Column(
             modifier = Modifier
-                .fillMaxHeight()
-                .width(24.dp)
+                .fillMaxHeight(0.92f)
+                .width(32.dp)
+                .align(Alignment.CenterEnd)
                 .onGloballyPositioned { coordinates ->
                     scrollerHeight = coordinates.size.height.toFloat()
-                    scrollerTop = coordinates.positionInRoot().y
                 }
-                .pointerInput(Unit) {
+                .pointerInput(alphabet) {
+                    // Gestion du tap direct
+                    detectTapGestures { offset ->
+                        val index = calculateLetterIndex(offset.y, scrollerHeight, alphabet.size)
+                        if (index in alphabet.indices) {
+                            selectedLetter = alphabet[index]
+                            onLetterSelected(alphabet[index])
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    }
+                }
+                .pointerInput(alphabet) {
+                    // Gestion du drag
                     detectDragGestures(
                         onDragStart = { offset ->
                             isDragging = true
-                            handleTouch(offset.y, scrollerHeight, alphabet) { letter ->
-                                selectedLetter = letter
-                                onLetterSelected(letter)
+                            val index = calculateLetterIndex(offset.y, scrollerHeight, alphabet.size)
+                            if (index in alphabet.indices && index != lastSelectedIndex) {
+                                lastSelectedIndex = index
+                                selectedLetter = alphabet[index]
+                                onLetterSelected(alphabet[index])
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             }
                         },
                         onDrag = { change, _ ->
                             change.consume()
-                            handleTouch(change.position.y, scrollerHeight, alphabet) { letter ->
-                                selectedLetter = letter
-                                onLetterSelected(letter)
+                            val index = calculateLetterIndex(
+                                change.position.y,
+                                scrollerHeight,
+                                alphabet.size
+                            )
+                            // Ne déclencher que si on change de lettre (évite les appels multiples)
+                            if (index in alphabet.indices && index != lastSelectedIndex) {
+                                lastSelectedIndex = index
+                                selectedLetter = alphabet[index]
+                                onLetterSelected(alphabet[index])
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             }
                         },
                         onDragEnd = {
@@ -111,44 +139,50 @@ fun FastScroller(
             alphabet.forEach { letter ->
                 Text(
                     text = letter,
-                    fontSize = 10.sp,
+                    fontSize = if (selectedLetter == letter) 12.sp else 11.sp,
                     fontWeight = if (selectedLetter == letter) FontWeight.Bold else FontWeight.Normal,
                     color = if (selectedLetter == letter)
                         MaterialTheme.colorScheme.primary
                     else
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(vertical = 1.dp)
                 )
             }
         }
     }
 }
 
-private fun handleTouch(
+/**
+ * Calcule l'index de la lettre en fonction de la position du toucher
+ * Optimisé pour éviter les calculs répétés
+ */
+private fun calculateLetterIndex(
     touchY: Float,
     scrollerHeight: Float,
-    alphabet: List<String>,
-    onLetterSelected: (String) -> Unit
-) {
-    val index = ((touchY / scrollerHeight) * alphabet.size).toInt()
-        .coerceIn(0, alphabet.size - 1)
-    onLetterSelected(alphabet[index])
+    alphabetSize: Int
+): Int {
+    if (scrollerHeight <= 0f) return 0
+
+    val normalizedPosition = (touchY / scrollerHeight).coerceIn(0f, 1f)
+    return (normalizedPosition * alphabetSize).toInt().coerceIn(0, alphabetSize - 1)
 }
 
 /**
  * Extension pour obtenir la première lettre d'une chaîne
  */
 fun String.firstLetterOrHash(): String {
-    return if (this.isEmpty()) "#"
-    else this.first().uppercaseChar().toString()
-        .let { if (it[0].isLetter()) it else "#" }
+    if (this.isEmpty()) return "#"
+    val firstChar = this.first().uppercaseChar()
+    return if (firstChar.isLetter()) firstChar.toString() else "#"
 }
 
 /**
  * Fonction pour grouper les items par première lettre
+ * Optimisée avec LinkedHashMap pour préserver l'ordre
  */
 fun <T> List<T>.groupByFirstLetter(selector: (T) -> String): Map<String, List<T>> {
     return this.groupBy { selector(it).firstLetterOrHash() }
-        .toSortedMap(compareBy { if (it == "#") "ZZZ" else it })
+        .toSortedMap(compareBy { if (it == "#") "" else it })
 }
 
 /**
