@@ -107,6 +107,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -123,6 +124,9 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import java.io.File
 import kotlin.random.Random
 import androidx.activity.compose.BackHandler
@@ -299,11 +303,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize services
+        ImageServiceSingleton.init(this)
         playlistManager = PlaylistManager(this)
         settingsManager = SettingsManager(this)
         lyricsService = LyricsService(this)
         playlists.addAll(playlistManager.loadPlaylists())
         favorites.addAll(playlistManager.loadFavorites())
+        
+        playlistManager = PlaylistManager(this)
+        settingsManager = SettingsManager(this)
+        lyricsService = LyricsService(this)
+        
+        // Load data in background
+        loadAppDataAsync()
 
         // Démarrer et lier le service de musique
         val serviceIntent = Intent(this, MusicService::class.java)
@@ -319,7 +332,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val player = musicService
-            val imageService = remember { ArtistImageService(this@MainActivity) }
+            val imageService = ImageServiceSingleton.getArtistImageService()
             val isDarkTheme = remember { mutableStateOf(settingsManager.isDarkTheme) }
 
             MaterialTheme(
@@ -403,10 +416,29 @@ class MainActivity : ComponentActivity() {
         ) == PackageManager.PERMISSION_GRANTED
 
         if (hasPermission) {
-            loadSongs()
-            loadAlbums()
-            loadArtists()
-            loadFolders()
+            loadAppDataAsync()
+        }
+    }
+    
+    // OPTIMIZED: Load all data asynchronously
+    private fun loadAppDataAsync() {
+        val scope = CoroutineScope(Dispatchers.IO)
+        scope.launch {
+            try {
+                // Load data in parallel
+                val songsDeferred = async(Dispatchers.IO) { loadSongs() }
+                val albumsDeferred = async(Dispatchers.IO) { loadAlbums() }
+                val artistsDeferred = async(Dispatchers.IO) { loadArtists() }
+                val foldersDeferred = async(Dispatchers.IO) { loadFolders() }
+                
+                // Wait for all to complete
+                songsDeferred.await()
+                albumsDeferred.await()
+                artistsDeferred.await()
+                foldersDeferred.await()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -623,12 +655,6 @@ class MainActivity : ComponentActivity() {
             if (selectedTab == 3) selectedArtist = null
             if (selectedTab == 4) selectedPlaylist = null
             if (selectedTab == 5) selectedFolder = null
-        }
-        LaunchedEffect(selectedTab) {
-            if (selectedTab == 2) selectedAlbum = null
-            if (selectedTab == 3) selectedArtist = null
-            if (selectedTab == 4) selectedPlaylist = null
-            if (selectedTab == 5) selectedFolder = null
 
             showLyricsScreen = false
             showQueueScreen = false
@@ -758,7 +784,7 @@ class MainActivity : ComponentActivity() {
                     3 -> {
                         if (selectedArtist != null) {
                             val artistSongs = songs.filter { it.artist == selectedArtist!!.name }
-                            val imageService = remember { ArtistImageService(this@MainActivity) }
+val imageService = ImageServiceSingleton.getArtistImageService()
                             BackHandler { selectedArtist = null }
                             ArtistDetailScreen(
                                 artist = selectedArtist!!,
@@ -1888,10 +1914,11 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // OPTIMIZED: Update position less frequently and only when needed
         LaunchedEffect(isPlaying) {
             while (isPlaying) {
                 musicPlayer.updatePosition()
-                delay(250)
+                delay(1000) // Further reduced to 1s for better performance
             }
         }
 
@@ -2153,83 +2180,52 @@ private fun formatDuration(ms: Long): String {
 }
 
 
-@Composable
-fun SongListScreen(
-    songs: List<Song>,
-    hasPermission: Boolean,
-    musicPlayer: MusicService,
-    onRequestPermission: () -> Unit,
-    onSongClick: (Song) -> Unit
-) {
-    val context = LocalContext.current
-    var searchQuery by remember { mutableStateOf("") }
 
-    // Filtrage optimisé avec mémorisation
-    val filteredSongs = remember(songs, searchQuery) {
-        if (searchQuery.isBlank()) {
-            songs
-        } else {
-            val query = searchQuery.lowercase()
-            songs.filter { song ->
-                song.title.lowercase().contains(query) ||
-                        song.artist.lowercase().contains(query) ||
-                        song.album.lowercase().contains(query)
+
+    
+
+    @Composable
+    fun SongListScreen(
+        songs: List<Song>,
+        hasPermission: Boolean,
+        onRequestPermission: () -> Unit,
+        musicPlayer: MusicService,
+        onSongClick: (Song) -> Unit
+    ) {
+        var searchQuery by remember { mutableStateOf("") }
+        val filteredSongs = remember(songs, searchQuery) {
+            if (searchQuery.isBlank()) songs
+            else songs.filter { it.title.contains(searchQuery, ignoreCase = true) ||
+                    it.artist.contains(searchQuery, ignoreCase = true) }
+        }
+        
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        val alphabet = remember { generateAlphabet() }
+        
+        // Group songs by first letter
+        val groupedSongs = remember(filteredSongs) {
+            filteredSongs.groupByFirstLetter { it.title }
+        }
+        
+        // Pre-calculate letter indices for fast scrolling
+        val letterIndexMap = remember(groupedSongs) {
+            val map = mutableMapOf<String, Int>()
+            var currentIndex = 0
+            groupedSongs.forEach { (letter, songsInGroup) ->
+                map[letter] = currentIndex
+                currentIndex += songsInGroup.size + 1 // +1 for the header
             }
+            map
         }
-    }
+        
+        val currentSong = musicPlayer.currentSong
+        val isPlaying = musicPlayer.isPlaying
+        val context = LocalContext.current
 
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    val alphabet = remember { generateAlphabet() }
-
-    // Groupage optimisé avec mémorisation
-    val groupedSongs = remember(filteredSongs) {
-        filteredSongs.groupByFirstLetter { it.title }
-    }
-
-    // ✅ PRÉ-CALCUL DES INDEX POUR CHAQUE LETTRE (OPTIMISATION CRITIQUE)
-    val letterIndexMap = remember(groupedSongs) {
-        val map = mutableMapOf<String, Int>()
-        var currentIndex = 0
-        groupedSongs.forEach { (letter, songsInGroup) ->
-            map[letter] = currentIndex
-            currentIndex += songsInGroup.size + 1 // +1 pour le header
-        }
-        map
-    }
-
-    val currentSong = musicPlayer.currentSong
-    val isPlaying = musicPlayer.isPlaying
-
-    // Scroll automatique optimisé
-    var hasScrolledToCurrentSong by remember { mutableStateOf(false) }
-    LaunchedEffect(currentSong, filteredSongs) {
-        if (currentSong != null && !hasScrolledToCurrentSong && filteredSongs.isNotEmpty()) {
-            val currentSongIndex = filteredSongs.indexOfFirst { it.id == currentSong.id }
-            if (currentSongIndex >= 0) {
-                var scrollIndex = 0
-                for ((letter, songsInGroup) in groupedSongs) {
-                    val indexInGroup = songsInGroup.indexOfFirst { it.id == currentSong.id }
-                    if (indexInGroup >= 0) {
-                        scrollIndex += indexInGroup + 1
-                        break
-                    }
-                    scrollIndex += songsInGroup.size + 1
-                }
-                delay(100)
-                listState.scrollToItem(scrollIndex.coerceAtLeast(0))
-                hasScrolledToCurrentSong = true
-            }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        hasScrolledToCurrentSong = false
-    }
-
-    Scaffold(
-        topBar = {
-            if (hasPermission && songs.isNotEmpty()) {
+        Scaffold(
+            topBar = {
+                if (hasPermission && songs.isNotEmpty()) {
                 TopAppBar(
                     title = {
                         OutlinedTextField(
@@ -2365,32 +2361,35 @@ fun SongListScreen(
     }
 }
 @Composable
-fun AlbumsScreen(
-    albums: List<Album>,
-    hasPermission: Boolean,
-    imageService: ArtistImageService,
-    onRequestPermission: () -> Unit,
-    onAlbumClick: (Album) -> Unit
-) {
-    val context = LocalContext.current
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    val alphabet = remember { generateAlphabet() }
-
-    val groupedAlbums = remember(albums) {
-        albums.groupByFirstLetter { it.name }
-    }
-
-    // ✅ PRÉ-CALCUL DES INDEX
-    val letterIndexMap = remember(groupedAlbums) {
-        val map = mutableMapOf<String, Int>()
-        var currentIndex = 0
-        groupedAlbums.forEach { (letter, albumsInGroup) ->
-            map[letter] = currentIndex
-            currentIndex += albumsInGroup.size + 1
+    fun AlbumsScreen(
+        albums: List<Album>,
+        hasPermission: Boolean,
+        imageService: ArtistImageService,
+        onRequestPermission: () -> Unit,
+        onAlbumClick: (Album) -> Unit
+    ) {
+        val context = LocalContext.current
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+val alphabet = remember { generateAlphabet() }
+        
+        // Group albums by first letter
+        val groupedAlbums = remember(albums) {
+            albums.groupByFirstLetter { it.name }
         }
-        map
-    }
+        
+        // Pre-calculate letter indices for fast scrolling
+        val letterIndexMap = remember(groupedAlbums) {
+            val map = mutableMapOf<String, Int>()
+            var currentIndex = 0
+            groupedAlbums.forEach { (letter, albumsInGroup) ->
+                map[letter] = currentIndex
+                currentIndex += albumsInGroup.size + 1
+            }
+            map
+        }
+
+    
 
     Scaffold { padding ->
         if (!hasPermission) {
@@ -2678,11 +2677,11 @@ fun AlbumItem(
             )
         }
 
-        Text(
-            text = "${album.songCount} chansons",
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+//        Text(
+//           text = "${album.songCount} chansons",
+//            fontSize = 14.sp,
+//            color = MaterialTheme.colorScheme.onSurfaceVariant
+//        )
     }
 }
 @Composable
