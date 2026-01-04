@@ -135,13 +135,31 @@ import androidx.activity.compose.BackHandler
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
 fun customColorScheme() = darkColorScheme(
-    primary = Color(0xFF7A7A7A),
-    primaryContainer = Color(0xFFFFFFFF),
-    onPrimaryContainer = Color(0xFF020202),
-    surface = Color(0xFF1C1C1E),
-    onSurface = Color(0xC2C2C2FF),
-    onSurfaceVariant = Color(0xFFFFFFFF),
-    surfaceVariant = Color(0xFF000000)
+    primary = Color(0xFF03A9F4),           // Nice blue instead of gray
+    onPrimary = Color(0xFF000000),           // Black text on blue buttons
+    primaryContainer = Color(0xFF01579B),      // Darker blue for containers
+    onPrimaryContainer = Color(0xFFE1F5FE),    // Light text on dark blue
+    
+    secondary = Color(0xFF00BCD4),             // Cyan accent
+    onSecondary = Color(0xFF000000),           // Black text on cyan
+    
+    tertiary = Color(0xFFFF5722),              // Orange accent instead of purple
+    onTertiary = Color(0xFF000000),           // Black text on orange
+    
+    surface = Color(0xFF000000),              // ✅ TRUE BLACK background
+    onSurface = Color(0xFFFFFFFF),             // White text on black
+    surfaceVariant = Color(0xFF1A1A1A),        // Slightly lighter black
+    onSurfaceVariant = Color(0xFFB0B0B0),     // Gray text for secondary info
+    
+    background = Color(0xFF000000),            // True black background
+    onBackground = Color(0xFFFFFFFF),           // White text
+    
+    outline = Color(0xFF333333),               // Subtle borders
+    outlineVariant = Color(0xFF2A2A2A),        // Even more subtle borders
+    
+    scrim = Color(0x99000000),                // Overlay for modals
+    
+    surfaceTint = Color(0xFF03A9F4)            // Blue tint for surfaces
 )
 
 data class Song(
@@ -340,9 +358,29 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(
                 colorScheme = if (isDarkThemeState.value) customColorScheme()
                 else lightColorScheme(
-                    primary = Color(0xFF0070FF),
-                    surface = Color(0xFFFFFFFF),
-                    onSurface = Color(0xFF000000)
+                    primary = Color(0xFF03A9F4),           // Same blue as dark theme
+                    onPrimary = Color(0xFFFFFFFF),           // White text on blue
+                    primaryContainer = Color(0xFFE1F5FE),    // Light blue container
+                    onPrimaryContainer = Color(0xFF01579B),  // Dark blue text
+                    
+                    secondary = Color(0xFF00BCD4),             // Cyan accent
+                    onSecondary = Color(0xFF000000),           // Black text on cyan
+                    
+                    tertiary = Color(0xFFFF5722),              // Orange accent
+                    onTertiary = Color(0xFFFFFFFF),           // White text on orange
+                    
+                    surface = Color(0xFFFFFFFF),              // True white background
+                    onSurface = Color(0xFF000000),             // Black text
+                    surfaceVariant = Color(0xFFF5F5F5),        // Light gray for cards
+                    onSurfaceVariant = Color(0xFF757575),     // Dark gray text
+                    
+                    background = Color(0xFFFFFFFF),            // White background
+                    onBackground = Color(0xFF000000),           // Black text
+                    
+                    outline = Color(0xFFE0E0E0),               // Light borders
+                    outlineVariant = Color(0xFFEEEEEE),        // Even lighter borders
+                    
+                    surfaceTint = Color(0xFF03A9F4)            // Blue tint for surfaces
                 )
             ) {
                 if (player == null) {
