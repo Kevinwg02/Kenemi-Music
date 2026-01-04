@@ -273,17 +273,18 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Thème sombre", fontWeight = FontWeight.Medium)
-                        Text(
-                            text = "Redémarrage de l'application nécessaire",
+Text(
+                            text = "Changement instantané du thème",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Switch(
+Switch(
                         checked = isDarkTheme,
                         onCheckedChange = {
                             isDarkTheme = it
                             settingsManager.isDarkTheme = it
+                            onThemeChanged(it)  // ✅ Trigger theme change in main app
                         }
                     )
                 }

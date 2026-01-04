@@ -333,10 +333,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             val player = musicService
             val imageService = ImageServiceSingleton.getArtistImageService()
-            val isDarkTheme = remember { mutableStateOf(settingsManager.isDarkTheme) }
+            // ✅ DYNAMIC THEME: Read from settings on every recomposition
+            // ✅ DYNAMIC THEME: Use the same state as SettingsScreen
+            val isDarkThemeState = remember { mutableStateOf(settingsManager.isDarkTheme) }
 
             MaterialTheme(
-                colorScheme = if (isDarkTheme.value) customColorScheme()
+                colorScheme = if (isDarkThemeState.value) customColorScheme()
                 else lightColorScheme(
                     primary = Color(0xFF0070FF),
                     surface = Color(0xFFFFFFFF),
@@ -360,7 +362,7 @@ class MainActivity : ComponentActivity() {
                         hasPermission = hasPermission,
                         imageService = imageService,
                         musicPlayer = player,
-                        isDarkThemeState = isDarkTheme,
+                        isDarkThemeState = isDarkThemeState,
                         lyricsService = lyricsService,
                         onRequestPermission = { requestPermission.launch(getPermissionString()) },
                         // Sauvegarder lors de la création
@@ -883,6 +885,7 @@ val imageService = ImageServiceSingleton.getArtistImageService()
                             onForceScan = { forceScanMusic() },
                             onThemeChanged = { newTheme ->
                                 isDarkThemeState.value = newTheme
+                                settingsManager.isDarkTheme = newTheme  // ✅ Save theme permanently
                             },
                             onRequestPermission = { requestPermission.launch(getPermissionString()) }
                         )
