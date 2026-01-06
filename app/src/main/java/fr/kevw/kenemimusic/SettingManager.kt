@@ -502,7 +502,7 @@ Switch(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Version by Kevinwg02", fontWeight = FontWeight.Medium)
                         Text(
-                            text = "25.12.21",
+                            text = "26.01.06",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

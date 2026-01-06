@@ -784,7 +784,7 @@ class MainActivity : ComponentActivity() {
                         onShowLyrics = { showLyricsScreen = true }
                     )
 
-                    1 -> SongListScreen(
+1 -> SongListScreen(
                         songs = songs,
                         hasPermission = hasPermission,
                         onRequestPermission = onRequestPermission,
@@ -793,7 +793,8 @@ class MainActivity : ComponentActivity() {
                             musicPlayer.setPlaylist(songs)
                             musicPlayer.playSong(song)
                             selectedTab = 0
-                        })
+                        },
+                        selectedTab = selectedTab)
 
                     2 -> {
 
@@ -1591,8 +1592,22 @@ val imageService = ImageServiceSingleton.getArtistImageService()
         var showDeleteDialog by remember { mutableStateOf(false) }
         var showEditDialog by remember { mutableStateOf(false) }
 
-        val currentSong = musicPlayer.currentSong // AJOUTÉ
+val currentSong = musicPlayer.currentSong // AJOUTÉ
         val isPlaying = musicPlayer.isPlaying // AJOUTÉ
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+
+        // Auto-scroll to current song in playlist
+        LaunchedEffect(currentSong?.id) {
+            currentSong?.let { song ->
+                val songIndex = songs.indexOfFirst { it.id == song.id }
+                if (songIndex != -1) {
+                    scope.launch {
+                        listState.animateScrollToItem(songIndex)
+                    }
+                }
+            }
+        }
 
         Scaffold(
             topBar = {
@@ -1682,19 +1697,19 @@ val imageService = ImageServiceSingleton.getArtistImageService()
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(songs) { song ->
-                            SongItem(
-                                song = song,
-                                onClick = { onSongClick(song) },
-                                isPlaying = isPlaying,
-                                isCurrentSong = currentSong?.id == song.id // AJOUTÉ
-                            )
-                            HorizontalDivider()
-                        }
+} else {
+                LazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
+                    items(songs) { song ->
+                        SongItem(
+                            song = song,
+                            onClick = { onSongClick(song) },
+                            isPlaying = isPlaying,
+                            isCurrentSong = currentSong?.id == song.id // AJOUTÉ
+                        )
+                        HorizontalDivider()
                     }
                 }
+            }
             }
 
             if (showDeleteDialog) {
@@ -2225,13 +2240,14 @@ private fun formatDuration(ms: Long): String {
 
     
 
-    @Composable
-    fun SongListScreen(
-        songs: List<Song>,
-        hasPermission: Boolean,
-        onRequestPermission: () -> Unit,
-        musicPlayer: MusicService,
-        onSongClick: (Song) -> Unit
+@Composable
+fun SongListScreen(
+    songs: List<Song>,
+    hasPermission: Boolean,
+    onRequestPermission: () -> Unit,
+    musicPlayer: MusicService,
+    onSongClick: (Song) -> Unit,
+    selectedTab: Int = 1
     ) {
         var searchQuery by remember { mutableStateOf("") }
         val filteredSongs = remember(songs, searchQuery) {
@@ -2260,9 +2276,34 @@ private fun formatDuration(ms: Long): String {
             map
         }
         
-        val currentSong = musicPlayer.currentSong
+val currentSong = musicPlayer.currentSong
         val isPlaying = musicPlayer.isPlaying
         val context = LocalContext.current
+
+        // Auto-scroll to current song when entering songs tab
+        LaunchedEffect(currentSong?.id) {
+            if (currentSong != null) { // Only when songs tab is active
+                val songIndex = filteredSongs.indexOfFirst { it.id == currentSong.id }
+                if (songIndex != -1) {
+                    // Calculate actual index in the LazyColumn (including headers)
+                    var actualIndex = 0
+                    var foundIndex = 0
+                    
+                    groupedSongs.forEach { (letter, songsInGroup) ->
+                        if (foundIndex <= songIndex && songIndex < foundIndex + songsInGroup.size) {
+                            actualIndex += (songIndex - foundIndex)
+                            return@forEach
+                        }
+                        actualIndex += songsInGroup.size + 1 // +1 for header
+                        foundIndex += songsInGroup.size
+                    }
+                    
+                    scope.launch {
+                        listState.animateScrollToItem(actualIndex)
+                    }
+                }
+            }
+        }
 
         Scaffold(
             topBar = {
@@ -2997,17 +3038,30 @@ fun AlbumDetailScreen(
     onBack: () -> Unit,
     onSongClick: (Song) -> Unit
 ) {
-    val currentSong = musicPlayer.currentSong
+val currentSong = musicPlayer.currentSong
     val isPlaying = musicPlayer.isPlaying
     var albumCoverUrl by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val listState = rememberLazyListState()
 
     LaunchedEffect(album.id) {
         scope.launch {
             albumCoverUrl = imageService.getAlbumCoverUrl(album.name, album.artist)
             isLoading = false
+        }
+    }
+
+    // Auto-scroll to current song in album
+    LaunchedEffect(currentSong?.id) {
+        currentSong?.let { song ->
+            val songIndex = songs.indexOfFirst { it.id == song.id }
+            if (songIndex != -1) {
+                scope.launch {
+                    listState.animateScrollToItem(songIndex)
+                }
+            }
         }
     }
 
@@ -3108,8 +3162,8 @@ fun AlbumDetailScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+} else {
+                LazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
                     items(songs) { song ->
                         SongItem(
                             song = song,
@@ -3134,17 +3188,30 @@ fun ArtistDetailScreen(
     onBack: () -> Unit,
     onSongClick: (Song) -> Unit
 ) {
-    val currentSong = musicPlayer.currentSong
+val currentSong = musicPlayer.currentSong
     val isPlaying = musicPlayer.isPlaying
     var artistImageUrl by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val listState = rememberLazyListState()
 
-    LaunchedEffect(artist.name) {
+LaunchedEffect(artist.name) {
         scope.launch {
             artistImageUrl = imageService.getArtistImageUrl(artist.name)
             isLoading = false
+        }
+    }
+
+    // Auto-scroll to current song in artist list
+    LaunchedEffect(currentSong?.id) {
+        currentSong?.let { song ->
+            val songIndex = songs.indexOfFirst { it.id == song.id }
+            if (songIndex != -1) {
+                scope.launch {
+                    listState.animateScrollToItem(songIndex)
+                }
+            }
         }
     }
 
