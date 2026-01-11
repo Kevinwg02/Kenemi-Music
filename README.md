@@ -2,7 +2,6 @@
 
 # 🎵 KenemiMusic
 
-### Un lecteur audio local pour Android, sans pub et sans collecte de données
 
 <p>
 J'en avais marre des lecteurs audio bourrés de pubs, alors j'ai fait le mien avec Material3 et Jetpack Compose.
@@ -11,62 +10,12 @@ J'en avais marre des lecteurs audio bourrés de pubs, alors j'ai fait le mien av
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9+-7F52FF.svg?style=flat&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Jetpack%20Compose-1.5+-4285F4.svg?style=flat&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
+⭐ N'oublie pas de star le projet si tu l'aimes !
 </div>
 
 ---
 
-## ✨ Fonctionnalités principales
-
-<table>
-<tr>
-<td width="33%" align="center">
-<h3>📂 Bibliothèque locale</h3>
-<p>Scan automatique et organisation intelligente</p>
-</td>
-<td width="33%" align="center">
-<h3>🎵 Lecteur complet</h3>
-<p>Shuffle, repeat, file d'attente modifiable</p>
-</td>
-<td width="33%" align="center">
-<h3>🎤 Paroles synchronisées</h3>
-<p>Recherche auto/manuelle, édition, cache</p>
-</td>
-</tr>
-<tr>
-<td width="33%" align="center">
-<h3>⭐ Favoris</h3>
-<p>Accès rapide à vos titres préférés</p>
-</td>
-<td width="33%" align="center">
-<h3>🎨 Interface moderne</h3>
-<p>Material3, thèmes, animations fluides</p>
-</td>
-<td width="33%" align="center">
-<h3>📱 Notification</h3>
-<p>Contrôle complet en arrière-plan</p>
-</td>
-</tr>
-</table>
-
----
-
-## 📖 Table des matières
-
-- [📂 Bibliothèque musicale](#-bibliothèque-musicale)
-- [🎵 Lecteur audio](#-lecteur-audio)
-- [🎤 Paroles synchronisées](#-paroles-synchronisées)
-- [⭐ Système de favoris](#-système-de-favoris)
-- [🎧 Playlists](#-playlists)
-- [🎨 Interface utilisateur](#-interface-utilisateur)
-- [🛠️ Technologies](#️-technologies)
-- [📥 Installation](#-installation)
-- [🤝 Contribution](#-contribution)
-
----
-
 ## 📂 Bibliothèque musicale
-
 
 - ✅ Scan automatique de tous les fichiers audio
 - ✅ Organisation par chansons, albums, artistes, playlists
@@ -78,30 +27,11 @@ J'en avais marre des lecteurs audio bourrés de pubs, alors j'ai fait le mien av
 
 
 ## 🎵 Lecteur audio
-
-### 🎮 Contrôles de base
-
-▶️ Lecture / Pause
-⏭️ Suivant / ⏮️ Précédent
-🔀 Mode aléatoire (shuffle)
-🔁 Répétition : off / une chanson / playlist
-
-### 📋 File d'attente
-- Visualisation complète des titres en attente
-- Réorganisation par glisser-déposer
-- Suppression de titres à la volée
-- Indicateur visuel du titre en cours de lecture
-
-### 🔊 Lecture en arrière-plan
-- Service dédié pour lecture continue
-- Contrôles complets via notification système
-- Reprise automatique après navigation
-- Gestion intelligente de la mémoire
-
-
+## 🎮 Contrôles de base
+## 📋 File d'attente
+## 🔊 Lecture en arrière-plan
 ## 🎤 Paroles synchronisées
-
-### 🔍 Recherche automatique
+## 🔍 Recherche automatique
 | Source | Type | Limitations |
 |--------|------|-------------|
 | Lyrics.ovh | API REST | ✅ Gratuite |
@@ -118,33 +48,23 @@ J'en avais marre des lecteurs audio bourrés de pubs, alors j'ai fait le mien av
 - ✍️ Saisie manuelle (coller ou taper)
 - ✏️ Édition des paroles existantes
 - 💾 Sauvegarde instantanée
-
-### 💾 Cache intelligent
-```
-📝 Paroles manuelles → Prioritaires et permanentes (♾️)
-🤖 Paroles auto      → Expiration après 90 jours (⏰)
-```
-
-## ⭐ Système de favoris
+- 💾 Cache des images et paroles
+- ⭐ Système de favoris
 
 - ❤️ Ajout/retrait rapide depuis le lecteur
 - 📂 Onglet dédié dans la section Playlists
 - 🔄 Synchronisation automatique
 - 💾 Sauvegarde persistante
 
-
 ## 🎧 Playlists
-
 
 - ➕ Créer des playlists personnalisées
 - ✏️ Modifier les playlists existantes
 - 🗑️ Supprimer des playlists
 - ➕➖ Ajouter ou retirer des titres
-- ▶️ Lecture complète ou par titre
-- 🎯 Gestion intuitive par dialogues
-
-
-## 🎨 Interface utilisateur
+- ❤️ Favories
+- 📊Stats
+- 🎨 Interface utilisateur
 
 
 ### 🎨 Design
@@ -158,14 +78,6 @@ J'en avais marre des lecteurs audio bourrés de pubs, alors j'ai fait le mien av
 - 📊 Barres audio animées pendant la lecture
 - 🏷️ Badge "En lecture" / "En pause"
 - 🎯 Mise en évidence du titre actuel
-- 🔄 Transitions fluides entre les écrans
-- 💫 Effets de chargement élégants
-
-### 🎭 États visuels
-kotlin
-▶️ En lecture    → Animation + Badge coloré
-⏸️ En pause      → Badge grisé
-⏭️ File d'attente → Numérotation + flèches
 
 
 ## 🖼️ Images et pochettes
@@ -200,61 +112,15 @@ kotlin
 
 </div>
 
----
-
-## 📱 Captures d'écran
-
-<div align="center">
-
-> 📸 *Captures d'écran à venir...*
-
-</div>
-
----
-
-## 📥 Installation
-
-### Prérequis
-- Android 8.0+ (API 26)
-- 30 MB d'espace libre
-- Permission d'accès aux fichiers audio
-```bash
-### Installation
-# Clone le repo
-git clone https://github.com/Kevinwg02/Kenemi-Music.git
-```
-# Ouvre avec Android Studio
-# Build & Run
-
-> 🚀 *APK disponible sur les Releases*
-
----
-
 
 ## 🤝 Contribution
 
-<div align="center">
-
 **Des bugs ? Des idées ? N'hésite pas à contribuer !**
 
-[![Issues](https://img.shields.io/badge/Issues-Signaler%20un%20bug-red?style=for-the-badge)](https://github.com/kevinwg02/kenemimusic/issues)
-[![Pull Requests](https://img.shields.io/badge/PR-Contribuer-green?style=for-the-badge)](https://github.com/kevinwg02/kenemimusic/pulls)
-[![Discussions](https://img.shields.io/badge/Discussions-Échanger-blue?style=for-the-badge)](https://github.com/kevinwg02/kenemimusic/discussions)
+---
 
-</div>
+## 📄 Licence
 
-### Comment contribuer ?
-1. 🍴 Fork le projet
-2. 🌿 Crée une branche (`git checkout -b feature/amazing-feature`)
-3. 💾 Commit tes changements (`git commit -m 'Add amazing feature'`)
-4. 📤 Push sur la branche (`git push origin feature/amazing-feature`)
-5. 🎉 Ouvre une Pull Request
+Ce projet est sous licence **MIT** - voir le fichier [LICENSE](LICENSE) pour plus de détails.
 
-
-<div align="center">
-
-### ⭐ N'oublie pas de star le projet si tu l'aimes !
-
-**KenemiMusic** - Simple, rapide, sans pub. 🎵
-
-</div>
+---
