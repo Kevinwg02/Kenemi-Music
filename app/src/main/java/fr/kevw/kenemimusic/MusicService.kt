@@ -58,6 +58,8 @@ class MusicService : Service() {
     // ===== AJOUT : GESTION DES ÉCOUTEURS FILAIRES =====
     private var headsetReceiver: BroadcastReceiver? = null
     private var isHeadsetReceiverRegistered = false
+    private lateinit var statsManager: StatsManager
+    private var songStartTime: Long = 0
 
     companion object {
         private const val NOTIFICATION_ID = 1
@@ -76,14 +78,18 @@ class MusicService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // ✅ INITIALISER StatsManager
+        statsManager = StatsManager(this)
+
         createNotificationChannel()
         setupMediaSession()
         setupAudioManager()
-        setupBluetoothReceiver() // ✅ AJOUT
-        setupHeadsetReceiver() // ✅ AJOUT
+        setupBluetoothReceiver()
+        setupHeadsetReceiver()
     }
 
-    // ===== AJOUT : CONFIGURATION DU RECEIVER BLUETOOTH =====
+    //  CONFIGURATION DU RECEIVER BLUETOOTH =====
     private fun setupBluetoothReceiver() {
         bluetoothReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -373,13 +379,29 @@ class MusicService : Service() {
     fun toggleShuffle() {
         isShuffleEnabled = !isShuffleEnabled
     }
-
+    // Méthode pour injecter StatsManager
+    fun setStatsManager(manager: StatsManager) {
+        this.statsManager = manager
+        android.util.Log.d("MusicService", "StatsManager configuré")
+    }
     fun playSong(song: Song) {
         if (!requestAudioFocus()) {
             return
         }
 
         try {
+            // ✅ ENREGISTRER la chanson précédente avant de changer
+            currentSong?.let { previousSong ->
+                val playDuration = (System.currentTimeMillis() - songStartTime) / 1000
+                // Enregistrer seulement si la chanson a été écoutée au moins 30 secondes
+                if (playDuration >= 30) {
+                    statsManager.recordSongPlay(previousSong, playDuration)
+                }
+            }
+
+            // ✅ NOTER le temps de début de la nouvelle chanson
+            songStartTime = System.currentTimeMillis()
+
             currentIndex = playlist.indexOfFirst { it.id == song.id }
 
             mediaPlayer?.release()
@@ -497,6 +519,14 @@ class MusicService : Service() {
     }
 
     private fun handleSongCompletion() {
+        currentSong?.let { song ->
+            val playDuration = (System.currentTimeMillis() - songStartTime) / 1000
+            if (playDuration >= 30) {
+                statsManager?.recordSongPlay(song, playDuration)
+                android.util.Log.d("MusicService", "Terminé: ${song.title} - ${playDuration}s")
+            }
+        }
+
         when (repeatMode) {
             RepeatMode.ONE -> currentSong?.let { playSong(it) }
             RepeatMode.ALL -> {
@@ -530,25 +560,30 @@ class MusicService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
-        // ✅ AJOUT : DÉSENREGISTRER LES RECEIVERS
+        // ✅ ENREGISTRER la chanson en cours avant de fermer
+        currentSong?.let { song ->
+            val playDuration = (System.currentTimeMillis() - songStartTime) / 1000
+            if (playDuration >= 30) {
+                statsManager.recordSongPlay(song, playDuration)
+            }
+        }
+
         try {
             if (isBluetoothReceiverRegistered) {
                 unregisterReceiver(bluetoothReceiver)
                 isBluetoothReceiverRegistered = false
-                android.util.Log.d("MusicService", "Bluetooth receiver désenregistré")
             }
         } catch (e: Exception) {
-            android.util.Log.e("MusicService", "Erreur lors du désenregistrement du Bluetooth receiver", e)
+            android.util.Log.e("MusicService", "Erreur Bluetooth receiver", e)
         }
 
         try {
             if (isHeadsetReceiverRegistered) {
                 unregisterReceiver(headsetReceiver)
                 isHeadsetReceiverRegistered = false
-                android.util.Log.d("MusicService", "Headset receiver désenregistré")
             }
         } catch (e: Exception) {
-            android.util.Log.e("MusicService", "Erreur lors du désenregistrement du Headset receiver", e)
+            android.util.Log.e("MusicService", "Erreur Headset receiver", e)
         }
 
         mediaSession.release()
