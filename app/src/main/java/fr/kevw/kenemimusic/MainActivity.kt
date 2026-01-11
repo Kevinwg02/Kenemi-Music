@@ -2743,21 +2743,29 @@ class MainActivity : ComponentActivity() {
         val context = LocalContext.current
 
         // Auto-scroll to current song when entering songs tab
-        LaunchedEffect(currentSong?.id) {
-            if (currentSong != null) { // Only when songs tab is active
+        LaunchedEffect(currentSong?.id, selectedTab) {
+            if (currentSong != null && selectedTab == 1) { // Only when songs tab is active
                 val songIndex = filteredSongs.indexOfFirst { it.id == currentSong.id }
                 if (songIndex != -1) {
                     // Calculate actual index in the LazyColumn (including headers)
                     var actualIndex = 0
-                    var foundIndex = 0
+                    var songsProcessed = 0
 
-                    groupedSongs.forEach { (letter, songsInGroup) ->
-                        if (foundIndex <= songIndex && songIndex < foundIndex + songsInGroup.size) {
-                            actualIndex += (songIndex - foundIndex)
-                            return@forEach
+                    for ((letter, songsInGroup) in groupedSongs) {
+                        // Ajouter 1 pour l'en-tête de section
+                        actualIndex++
+
+                        // Vérifier si la chanson est dans ce groupe
+                        if (songIndex < songsProcessed + songsInGroup.size) {
+                            // La chanson est dans ce groupe
+                            val positionInGroup = songIndex - songsProcessed
+                            actualIndex += positionInGroup
+                            break
                         }
-                        actualIndex += songsInGroup.size + 1 // +1 for header
-                        foundIndex += songsInGroup.size
+
+                        // Ajouter toutes les chansons de ce groupe
+                        actualIndex += songsInGroup.size
+                        songsProcessed += songsInGroup.size
                     }
 
                     scope.launch {
