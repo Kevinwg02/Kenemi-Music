@@ -401,6 +401,7 @@ class MainActivity : ComponentActivity() {
                         albums = albums,
                         artists = artists,
                         playlists = playlists,
+                        folders = folders,
                         favorites = favorites,
                         playlistManager = playlistManager,
                         statsManager = statsManager,
@@ -504,13 +505,16 @@ class MainActivity : ComponentActivity() {
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.ALBUM
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.DATA
         )
 
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        // Filter to only include files from Music folder
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DATA} LIKE ?"
 
+        val selectionArgs = arrayOf("%Music%")
         contentResolver.query(
-            collection, projection, selection, null, "${MediaStore.Audio.Media.TITLE} ASC"
+            collection, projection, selection, selectionArgs, "${MediaStore.Audio.Media.TITLE} ASC"
         )?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
             val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
@@ -518,6 +522,7 @@ class MainActivity : ComponentActivity() {
             val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+            val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
@@ -526,6 +531,7 @@ class MainActivity : ComponentActivity() {
                 val duration = cursor.getLong(durationColumn)
                 val albumId = cursor.getLong(albumIdColumn)
                 val album = cursor.getString(albumColumn)
+                val dataPath = cursor.getString(dataColumn)
 
                 // VÉRIFICATION 1 : Filtrer les fichiers avec durée invalide
                 if (duration <= 0) {
@@ -649,21 +655,74 @@ class MainActivity : ComponentActivity() {
     private fun loadFolders() {
         val folderMap = mutableMapOf<String, MutableList<Song>>()
 
-        // Grouper les chansons par dossier
-        songs.forEach { song ->
-            val path = song.uri.path ?: return@forEach
-            val folderPath = File(path).parent ?: return@forEach
+        // Grouper les chansons par dossier en utilisant les chemins réels des fichiers
+        contentResolver.query(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            },
+            arrayOf(
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.DURATION,
+                MediaStore.Audio.Media.ALBUM_ID,
+                MediaStore.Audio.Media.ALBUM,
+                MediaStore.Audio.Media.DATA
+            ),
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DATA} LIKE ?",
+            arrayOf("%Music%"),
+            "${MediaStore.Audio.Media.DATA} ASC"
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+            val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+            val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+            val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
 
-            if (!folderMap.containsKey(folderPath)) {
-                folderMap[folderPath] = mutableListOf()
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idColumn)
+                val title = cursor.getString(titleColumn)
+                val artist = cursor.getString(artistColumn)
+                val duration = cursor.getLong(durationColumn)
+                val albumId = cursor.getLong(albumIdColumn)
+                val album = cursor.getString(albumColumn)
+                val dataPath = cursor.getString(dataColumn)
+
+                // Filtrer uniquement les fichiers dans le dossier Music
+                if (duration <= 0 || !dataPath.contains("/Music/", ignoreCase = true)) {
+                    continue
+                }
+
+                val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+                val song = Song(id, title, artist ?: "Artiste inconnu", duration, uri, albumId, album ?: "Album inconnu")
+                
+                val file = File(dataPath)
+                val folderFile = file.parentFile ?: continue
+                
+                // Ne garder que les dossiers dans Music
+                if (!folderFile.absolutePath.contains("/Music/", ignoreCase = true)) {
+                    continue
+                }
+
+                val folderPath = folderFile.absolutePath
+                if (!folderMap.containsKey(folderPath)) {
+                    folderMap[folderPath] = mutableListOf()
+                }
+                folderMap[folderPath]?.add(song)
             }
-            folderMap[folderPath]?.add(song)
         }
 
         // Créer la liste des dossiers
         val folderList = folderMap.map { (path, songs) ->
+            val folderFile = File(path)
             MusicFolder(
-                path = path, name = File(path).name, songCount = songs.size
+                path = path, 
+                name = folderFile.name, 
+                songCount = songs.size
             )
         }.sortedBy { it.name }
 
@@ -677,6 +736,7 @@ class MainActivity : ComponentActivity() {
         albums: List<Album>,
         artists: List<Artist>,
         playlists: List<Playlist>,
+        folders: List<MusicFolder>,
         hasPermission: Boolean,
         musicPlayer: MusicService,
         imageService: ArtistImageService,
@@ -773,11 +833,11 @@ class MainActivity : ComponentActivity() {
                             Icons.Default.QueueMusic, "Playlists", Modifier.size(26.dp)
                         )
                     }, selected = selectedTab == 4, onClick = { selectedTab = 4 })
-//                    NavigationBarItem(
-//                        icon = { Icon(Icons.Default.Folder, "Dossiers", Modifier.size(26.dp)) },
-//                        selected = selectedTab == 5,
-//                        onClick = { selectedTab = 5 }
-//                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Folder, "Dossiers", Modifier.size(26.dp)) },
+                        selected = selectedTab == 5,
+                        onClick = { selectedTab = 5 }
+                    )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Settings, "Paramètres", Modifier.size(26.dp)) },
                         selected = selectedTab == 6,
@@ -927,6 +987,46 @@ class MainActivity : ComponentActivity() {
 //                            )
 //                        }
 //                    }
+                    5 -> {
+                        if (selectedFolder != null) {
+                            val folderSongs = songs.filter { song ->
+                                // Get actual file path from content resolver
+                                var isInFolder = false
+                                contentResolver.query(
+                                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                    arrayOf(MediaStore.Audio.Media.DATA),
+                                    "${MediaStore.Audio.Media._ID} = ?",
+                                    arrayOf(song.id.toString()),
+                                    null
+                                )?.use { cursor ->
+                                    val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                                    if (cursor.moveToFirst()) {
+                                        val dataPath = cursor.getString(dataColumn)
+                                        val file = File(dataPath)
+                                        isInFolder = file.parentFile?.absolutePath == selectedFolder!!.path
+                                    }
+                                }
+                                isInFolder
+                            }
+                            FolderDetailScreen(
+                                folder = selectedFolder!!,
+                                songs = folderSongs,
+                                onBack = { selectedFolder = null },
+                                onSongClick = { song ->
+                                    musicPlayer.setPlaylist(folderSongs)
+                                    musicPlayer.playSong(song)
+                                    selectedTab = 0
+                                }
+                            )
+                        } else {
+                            FoldersScreen(
+                                folders = folders,
+                                hasPermission = hasPermission,
+                                onRequestPermission = onRequestPermission,
+                                onFolderClick = { folder -> selectedFolder = folder }
+                            )
+                        }
+                    }
                     6 -> {
                         // ✅ AJOUTEZ BackHandler ICI AUSSI
                         BackHandler { selectedTab = 0 }
@@ -2056,8 +2156,8 @@ class MainActivity : ComponentActivity() {
         var showDeleteDialog by remember { mutableStateOf(false) }
         var showEditDialog by remember { mutableStateOf(false) }
 
-        val currentSong = musicPlayer.currentSong // AJOUTÉ
-        val isPlaying = musicPlayer.isPlaying // AJOUTÉ
+        val currentSong = musicPlayer.currentSong
+        val isPlaying = musicPlayer.isPlaying
         val listState = rememberLazyListState()
         val scope = rememberCoroutineScope()
 
@@ -2168,7 +2268,7 @@ class MainActivity : ComponentActivity() {
                                 song = song,
                                 onClick = { onSongClick(song) },
                                 isPlaying = isPlaying,
-                                isCurrentSong = currentSong?.id == song.id // AJOUTÉ
+                                isCurrentSong = currentSong?.id == song.id
                             )
                             HorizontalDivider()
                         }
@@ -3649,8 +3749,8 @@ class MainActivity : ComponentActivity() {
                             SongItem(
                                 song = song,
                                 onClick = { onSongClick(song) },
-                                isPlaying = isPlaying,                    // AJOUTÉ
-                                isCurrentSong = currentSong?.id == song.id // AJOUTÉ
+                                isPlaying = isPlaying,
+                                isCurrentSong = currentSong?.id == song.id
                             )
                             HorizontalDivider()
                         }
@@ -3801,7 +3901,7 @@ class MainActivity : ComponentActivity() {
                                 song = song,
                                 onClick = { onSongClick(song) },
                                 isPlaying = isPlaying,
-                                isCurrentSong = currentSong?.id == song.id // AJOUTÉ
+                                isCurrentSong = currentSong?.id == song.id
                             )
                             HorizontalDivider()
                         }
