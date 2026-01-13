@@ -2,125 +2,87 @@
 
 # 🎵 KenemiMusic
 
-
-<p>
-J'en avais marre des lecteurs audio bourrés de pubs, alors j'ai fait le mien avec Material3 et Jetpack Compose.
-</p>
-
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9+-7F52FF.svg?style=flat&logo=kotlin)](https://kotlinlang.org)
-[![Compose](https://img.shields.io/badge/Jetpack%20Compose-1.5+-4285F4.svg?style=flat&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+<p> J'en avais marre des lecteurs audio bourrés de pubs, alors j'ai fait le mien avec Material3 et Jetpack Compose. </p>
 ⭐ N'oublie pas de star le projet si tu l'aimes !
 </div>
 
----
 
 ## 📂 Bibliothèque musicale
 
-- ✅ Scan automatique de tous les fichiers audio
-- ✅ Organisation par chansons, albums, artistes, playlists
-- ✅ Index alphabétique (A-Z) pour navigation rapide
-- ✅ Filtre intelligent (exclut les fichiers corrompus)
-- ✅ Recherche globale dans tous les contenus
-- ✅ Affichage optimisé avec scrolling fluide
-
+- Scan automatique des fichiers audio
+- Organisation par titres, albums, artistes et playlists
+- Index alphabétique (A–Z)
+- Filtrage des fichiers corrompus
+- Recherche dans le dossier **Music**
 
 
 ## 🎵 Lecteur audio
-## 🎮 Contrôles de base
-## 📋 File d'attente
-## 🔊 Lecture en arrière-plan
-## 🎤 Paroles synchronisées
-## 🔍 Recherche automatique
-| Source | Type | Limitations |
-|--------|------|-------------|
-| Lyrics.ovh | API REST | ✅ Gratuite |
-| ChartLyrics | SOAP API | ✅ Gratuite |
-| Lyrist | Vercel API | ✅ Gratuite |
-| Alternatives | Multiple | ✅ Gratuite |
 
-- 🎯 **5 variantes** testées automatiquement par chanson
-- 🔓 **Aucune clé API** requise
-- ♾️ **Aucune limitation** de requêtes
-
-### ✏️ Recherche manuelle
-- 🔎 Recherche avec suggestions en temps réel
-- ✍️ Saisie manuelle (coller ou taper)
-- ✏️ Édition des paroles existantes
-- 💾 Sauvegarde instantanée
-- 💾 Cache des images et paroles
-- ⭐ Système de favoris
-
-- ❤️ Ajout/retrait rapide depuis le lecteur
-- 📂 Onglet dédié dans la section Playlists
-- 🔄 Synchronisation automatique
-- 💾 Sauvegarde persistante
-
-## 🎧 Playlists
-
-- ➕ Créer des playlists personnalisées
-- ✏️ Modifier les playlists existantes
-- 🗑️ Supprimer des playlists
-- ➕➖ Ajouter ou retirer des titres
-- ❤️ Favories
-- 📊Stats
-- 🎨 Interface utilisateur
+- Contrôles de lecture simples
+- File d’attente
+- Lecture en arrière-plan
+- Affichage de l’état (lecture / pause)
 
 
-### 🎨 Design
-- 🏗️ **Jetpack Compose** - UI déclarative moderne
-- 🎨 **Material3** - Design system Google
-- 🌓 Thème **sombre/clair** personnalisable
-- 📱 Navigation par **onglets** intuitive
-- 📄 Fiches détaillées **albums/artistes**
+## 🎧 Playlists & Favoris
+
+- Création, modification et suppression de playlists
+- Ajout / retrait de titres
+- Onglet dédié aux favoris
+- Sauvegarde persistante
+
+
+
+## 🎨 Interface & design
+
+- Jetpack Compose
+- Material3
+- Thème clair / sombre
+- Navigation par onglets
+- Fiches albums et artistes
 
 ### ✨ Animations
-- 📊 Barres audio animées pendant la lecture
-- 🏷️ Badge "En lecture" / "En pause"
-- 🎯 Mise en évidence du titre actuel
+
+- Barres audio animées
+- Mise en avant du titre en cours
+- Indicateurs lecture / pause
+
 
 
 ## 🖼️ Images et pochettes
 
-- 🎨 Récupération automatique des pochettes d'albums
-- 👤 Photos d'artistes depuis services externes
-- 💾 Cache local pour performances optimales
-- 🖼️ Affichage dans lecteur et fiches détaillées
-- ⚡ Chargement asynchrone avec Coil
+- Récupération automatique des pochettes
+- Photos d’artistes via services externes
+- Cache local
+- Chargement asynchrone avec Coil
+
 
 
 ## ⚙️ Paramètres
 
-- 🌓 Changement de thème (sombre/clair)
-- 🔄 Force le scan de la bibliothèque
-- 🔐 Gestion des permissions
-- ⚙️ Accès rapide aux réglages système
+- Changement de thème
+- Scan manuel de la bibliothèque
+- Gestion des permissions
+- Accès rapide aux réglages système
 
 
-## 🛠️ Technologies
+### 🔍 Recherche automatique des paroles
 
-<div align="center">
+- Lyrics.ovh, ChartLyrics, Lyrist
+- Aucune limitation de requêtes
+- Cache local des paroles et images
+- Recherche manuelle
 
-| Catégorie | Technologies |
-|-----------|-------------|
-| **Langage** | ![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white) |
-| **UI** | ![Compose](https://img.shields.io/badge/Jetpack%20Compose-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white) ![Material3](https://img.shields.io/badge/Material%203-757575?style=for-the-badge&logo=material-design&logoColor=white) |
-| **Async** | ![Coroutines](https://img.shields.io/badge/Coroutines-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white) |
-| **Audio** | ![MediaPlayer](https://img.shields.io/badge/MediaPlayer-3DDC84?style=for-the-badge&logo=android&logoColor=white) |
-| **Images** | ![Coil](https://img.shields.io/badge/Coil-FF6F00?style=for-the-badge) |
-| **Cache** | ![SharedPreferences](https://img.shields.io/badge/SharedPreferences-3DDC84?style=for-the-badge&logo=android&logoColor=white) |
-
-</div>
-
-
-## 🤝 Contribution
-
-**Des bugs ? Des idées ? N'hésite pas à contribuer !**
 
 ---
 
+## 🤝 Contribution
+
+Bugs, idées ou améliorations : les contributions sont les bienvenues !
+
+
 ## 📄 Licence
 
-Ce projet est sous licence **MIT** - voir le fichier [LICENSE](LICENSE) pour plus de détails.
+Projet sous licence **MIT** — voir le fichier [LICENSE](LICENSE).
 
 ---
