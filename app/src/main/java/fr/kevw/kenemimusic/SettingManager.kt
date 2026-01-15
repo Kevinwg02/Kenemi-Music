@@ -42,6 +42,10 @@ class SettingsManager(context: Context) {
     var highQualityImages: Boolean
         get() = prefs.getBoolean("high_quality_images", true)
         set(value) = prefs.edit().putBoolean("high_quality_images", value).apply()
+
+    var musicFolderName: String
+        get() = prefs.getString("music_folder_name", "Music") ?: "Music"
+        set(value) = prefs.edit().putString("music_folder_name", value).apply()
 }
 
 // ===== ÉCRAN DES PARAMÈTRES =====
@@ -58,9 +62,11 @@ fun SettingsScreen(
     var isDarkTheme by remember { mutableStateOf(settingsManager.isDarkTheme) }
     var autoScanOnStart by remember { mutableStateOf(settingsManager.autoScanOnStart) }
     var highQualityImages by remember { mutableStateOf(settingsManager.highQualityImages) }
+    var musicFolderName by remember { mutableStateOf(settingsManager.musicFolderName) }
     var isScanning by remember { mutableStateOf(false) }
     var cacheSize by remember { mutableStateOf(0) } // ✅ AJOUTÉ
     var showClearCacheDialog by remember { mutableStateOf(false) } // ✅ AJOUTÉ
+    var showFolderDialog by remember { mutableStateOf(false) } // ✅ AJOUTÉ
     val scope = rememberCoroutineScope()
 
     // ✅ Charger la taille du cache au démarrage
@@ -378,6 +384,41 @@ Switch(
                 HorizontalDivider()
             }
 
+            // Dossier de musique
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showFolderDialog = true
+                        }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Dossier de musique", fontWeight = FontWeight.Medium)
+                        Text(
+                            text = musicFolderName,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                HorizontalDivider()
+            }
+
             // Forcer le scan
             item {
                 Row(
@@ -511,6 +552,54 @@ Switch(
                 }
             }
         }
+    }
+
+    // ✅ Dialog pour éditer le dossier de musique
+    if (showFolderDialog) {
+        var tempFolderName by remember { mutableStateOf(musicFolderName) }
+        AlertDialog(
+            onDismissRequest = { showFolderDialog = false },
+            title = { Text("Dossier de musique") },
+            text = {
+                Column {
+                    Text("Entrez le nom du dossier contenant votre musique:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = tempFolderName,
+                        onValueChange = { tempFolderName = it },
+                        label = { Text("Nom du dossier") },
+                        placeholder = { Text("Music") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Exemples: Music, Audio, Téléchargements, etc.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (tempFolderName.isNotBlank()) {
+                            musicFolderName = tempFolderName.trim()
+                            settingsManager.musicFolderName = musicFolderName
+                            onForceScan() // Relancer le scan avec le nouveau dossier
+                        }
+                        showFolderDialog = false
+                    }
+                ) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFolderDialog = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
     }
 
     // ✅ Dialog de confirmation pour vider le cache

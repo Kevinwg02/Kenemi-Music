@@ -512,7 +512,7 @@ class MainActivity : ComponentActivity() {
         // Filter to only include files from Music folder
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DATA} LIKE ?"
 
-        val selectionArgs = arrayOf("%Music%")
+        val selectionArgs = arrayOf("%${settingsManager.musicFolderName}%")
         contentResolver.query(
             collection, projection, selection, selectionArgs, "${MediaStore.Audio.Media.TITLE} ASC"
         )?.use { cursor ->
@@ -672,7 +672,7 @@ class MainActivity : ComponentActivity() {
                 MediaStore.Audio.Media.DATA
             ),
             "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DATA} LIKE ?",
-            arrayOf("%Music%"),
+            arrayOf("%${settingsManager.musicFolderName}%"),
             "${MediaStore.Audio.Media.DATA} ASC"
         )?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
