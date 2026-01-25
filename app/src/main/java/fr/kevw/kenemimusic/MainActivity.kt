@@ -359,6 +359,27 @@ class MainActivity : ComponentActivity() {
             val isDarkThemeState = remember { mutableStateOf(settingsManager.isDarkTheme) }
             LaunchedEffect(player) {
                 player?.setStatsManager(statsManager)
+                player?.setSettingsManager(settingsManager)
+            }
+
+            // In onCreate, after songs are loaded and service is bound, add:
+            LaunchedEffect(musicService, songs) {
+                val service = musicService
+                if (service != null && songs.isNotEmpty()) {
+                    val lastSongId = settingsManager.lastPlayedSongId
+                    if (lastSongId != -1L) {
+                        val lastSong = songs.firstOrNull { it.id == lastSongId }
+                        if (lastSong != null) {
+                            service.setPlaylist(songs)
+                            service.playSong(lastSong)
+                            service.pause() // Start paused
+                            val savedPosition = settingsManager.lastPlayedPosition
+                            if (savedPosition > 0) {
+                                service.seekTo(savedPosition)
+                            }
+                        }
+                    }
+                }
             }
 
             MaterialTheme(

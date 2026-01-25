@@ -29,6 +29,7 @@ import androidx.media.app.NotificationCompat.MediaStyle
 
 class MusicService : Service() {
     private val binder = MusicBinder()
+    private lateinit var settingsManager: SettingsManager
     private var mediaPlayer: MediaPlayer? = null
     var currentSong: Song? = null
     var isPlaying by mutableStateOf(false)
@@ -384,11 +385,32 @@ class MusicService : Service() {
         this.statsManager = manager
         android.util.Log.d("MusicService", "StatsManager configuré")
     }
+    fun setSettingsManager(manager: SettingsManager) {
+        this.settingsManager = manager
+        android.util.Log.d("MusicService", "SettingsManager configuré")
+    }
+    private fun saveCurrentSongToSettings() {
+        if (::settingsManager.isInitialized) {
+            currentSong?.let { song ->
+                settingsManager.lastPlayedSongId = song.id
+                settingsManager.lastPlayedPosition = currentPosition
+                android.util.Log.d("MusicService", "Sauvegarde: ${song.title} à ${currentPosition}ms")
+            }
+        }
+    }
+    // Save last played song when it changes
+    fun saveLastPlayedSong(settingsManager: SettingsManager) {
+        currentSong?.let { song ->
+            settingsManager.lastPlayedSongId = song.id
+            settingsManager.lastPlayedPosition = currentPosition
+        }
+    }
     fun playSong(song: Song) {
         if (!requestAudioFocus()) {
             return
         }
-
+        onStateChanged?.invoke()
+        saveCurrentSongToSettings()
         try {
             // ✅ ENREGISTRER la chanson précédente avant de changer
             currentSong?.let { previousSong ->
@@ -451,6 +473,7 @@ class MusicService : Service() {
         updatePlaybackState()
         startForeground(NOTIFICATION_ID, buildNotification())
         onStateChanged?.invoke()
+        saveCurrentSongToSettings()
     }
 
     fun resume() {
@@ -508,6 +531,7 @@ class MusicService : Service() {
         mediaPlayer?.seekTo(position.toInt())
         currentPosition = position
         updatePlaybackState()
+        saveCurrentSongToSettings()
     }
 
     fun updatePosition() {

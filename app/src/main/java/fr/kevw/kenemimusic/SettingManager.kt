@@ -46,6 +46,16 @@ class SettingsManager(context: Context) {
     var musicFolderName: String
         get() = prefs.getString("music_folder_name", "Music") ?: "Music"
         set(value) = prefs.edit().putString("music_folder_name", value).apply()
+
+    // ✅ NOUVEAU : Sauvegarder/charger la dernière chanson jouée
+    var lastPlayedSongId: Long
+        get() = prefs.getLong("last_played_song_id", -1L)
+        set(value) = prefs.edit().putLong("last_played_song_id", value).apply()
+
+    // ✅ NOUVEAU : Sauvegarder/charger la position de lecture de la dernière chanson
+    var lastPlayedPosition: Long
+        get() = prefs.getLong("last_played_position", 0L)
+        set(value) = prefs.edit().putLong("last_played_position", value).apply()
 }
 
 // ===== ÉCRAN DES PARAMÈTRES =====
@@ -58,23 +68,21 @@ fun SettingsScreen(
     onRequestPermission: () -> Unit
 ) {
     val context = LocalContext.current
-    val imageService = remember { ArtistImageService(context) } // ✅ AJOUTÉ
+    val imageService = remember { ArtistImageService(context) }
     var isDarkTheme by remember { mutableStateOf(settingsManager.isDarkTheme) }
     var autoScanOnStart by remember { mutableStateOf(settingsManager.autoScanOnStart) }
     var highQualityImages by remember { mutableStateOf(settingsManager.highQualityImages) }
     var musicFolderName by remember { mutableStateOf(settingsManager.musicFolderName) }
     var isScanning by remember { mutableStateOf(false) }
-    var cacheSize by remember { mutableStateOf(0) } // ✅ AJOUTÉ
-    var showClearCacheDialog by remember { mutableStateOf(false) } // ✅ AJOUTÉ
-    var showFolderDialog by remember { mutableStateOf(false) } // ✅ AJOUTÉ
+    var cacheSize by remember { mutableStateOf(0) }
+    var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showFolderDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // ✅ Charger la taille du cache au démarrage
     LaunchedEffect(Unit) {
         cacheSize = imageService.getCacheSize()
     }
 
-    // Vérifier les permissions en temps réel
     var hasAudioPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -95,7 +103,6 @@ fun SettingsScreen(
         )
     }
 
-    // Rafraîchir l'état des permissions quand on revient sur l'écran
     LaunchedEffect(Unit) {
         while (true) {
             delay(500)
@@ -144,7 +151,6 @@ fun SettingsScreen(
                 )
             }
 
-            // Permission Audio/Musique
             item {
                 Row(
                     modifier = Modifier
@@ -198,7 +204,6 @@ fun SettingsScreen(
                 HorizontalDivider()
             }
 
-            // Permission Notifications (Android 13+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 item {
                     Row(
@@ -258,7 +263,6 @@ fun SettingsScreen(
                 )
             }
 
-            // Thème sombre/clair
             item {
                 Row(
                     modifier = Modifier
@@ -279,25 +283,24 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Thème sombre", fontWeight = FontWeight.Medium)
-Text(
+                        Text(
                             text = "Changement instantané du thème",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-Switch(
+                    Switch(
                         checked = isDarkTheme,
                         onCheckedChange = {
                             isDarkTheme = it
                             settingsManager.isDarkTheme = it
-                            onThemeChanged(it)  // ✅ Trigger theme change in main app
+                            onThemeChanged(it)
                         }
                     )
                 }
                 HorizontalDivider()
             }
 
-            // Qualité des images
             item {
                 Row(
                     modifier = Modifier
@@ -346,7 +349,6 @@ Switch(
                 )
             }
 
-            // Auto-scan au démarrage
             item {
                 Row(
                     modifier = Modifier
@@ -384,7 +386,6 @@ Switch(
                 HorizontalDivider()
             }
 
-            // Dossier de musique
             item {
                 Row(
                     modifier = Modifier
@@ -419,7 +420,6 @@ Switch(
                 HorizontalDivider()
             }
 
-            // Forcer le scan
             item {
                 Row(
                     modifier = Modifier
@@ -478,7 +478,6 @@ Switch(
                 HorizontalDivider()
             }
 
-            // ✅ Vider le cache des images
             item {
                 Row(
                     modifier = Modifier
@@ -524,8 +523,6 @@ Switch(
                 )
             }
 
-
-            // Développeur
             item {
                 Row(
                     modifier = Modifier
@@ -543,18 +540,16 @@ Switch(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Version by Kevinwg02", fontWeight = FontWeight.Medium)
                         Text(
-                            text = "26.01.10",
+                            text = "26.01.25",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-
                     }
                 }
             }
         }
     }
 
-    // ✅ Dialog pour éditer le dossier de musique
     if (showFolderDialog) {
         var tempFolderName by remember { mutableStateOf(musicFolderName) }
         AlertDialog(
@@ -586,7 +581,7 @@ Switch(
                         if (tempFolderName.isNotBlank()) {
                             musicFolderName = tempFolderName.trim()
                             settingsManager.musicFolderName = musicFolderName
-                            onForceScan() // Relancer le scan avec le nouveau dossier
+                            onForceScan()
                         }
                         showFolderDialog = false
                     }
@@ -602,7 +597,6 @@ Switch(
         )
     }
 
-    // ✅ Dialog de confirmation pour vider le cache
     if (showClearCacheDialog) {
         AlertDialog(
             onDismissRequest = { showClearCacheDialog = false },
@@ -635,7 +629,6 @@ Switch(
     }
 }
 
-// Fonction pour obtenir la permission audio selon la version Android
 private fun getAudioPermissionString(): String {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.READ_MEDIA_AUDIO
@@ -644,7 +637,6 @@ private fun getAudioPermissionString(): String {
     }
 }
 
-// Fonction pour ouvrir les paramètres de l'application
 private fun openAppSettings(context: Context) {
     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
         data = Uri.fromParts("package", context.packageName, null)
