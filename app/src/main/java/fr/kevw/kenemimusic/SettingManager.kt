@@ -50,12 +50,32 @@ class SettingsManager(context: Context) {
     // ✅ NOUVEAU : Sauvegarder/charger la dernière chanson jouée
     var lastPlayedSongId: Long
         get() = prefs.getLong("last_played_song_id", -1L)
-        set(value) = prefs.edit().putLong("last_played_song_id", value).apply()
+        set(value) {
+            prefs.edit().putLong("last_played_song_id", value).commit() // Utiliser commit() pour sauvegarde immédiate
+        }
 
     // ✅ NOUVEAU : Sauvegarder/charger la position de lecture de la dernière chanson
     var lastPlayedPosition: Long
         get() = prefs.getLong("last_played_position", 0L)
-        set(value) = prefs.edit().putLong("last_played_position", value).apply()
+        set(value) {
+            prefs.edit().putLong("last_played_position", value).commit() // Utiliser commit() pour sauvegarde immédiate
+        }
+
+    // ✅ NOUVEAU : Sauvegarder la chanson et la position en même temps
+    fun saveLastPlayedState(songId: Long, position: Long) {
+        prefs.edit()
+            .putLong("last_played_song_id", songId)
+            .putLong("last_played_position", position)
+            .commit() // Utiliser commit() pour sauvegarde immédiate et atomique
+    }
+
+    // ✅ NOUVEAU : Effacer l'état de dernière lecture
+    fun clearLastPlayedState() {
+        prefs.edit()
+            .remove("last_played_song_id")
+            .remove("last_played_position")
+            .commit()
+    }
 }
 
 // ===== ÉCRAN DES PARAMÈTRES =====

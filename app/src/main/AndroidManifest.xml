@@ -47,7 +47,8 @@
         <service
             android:name=".MusicService"
             android:foregroundServiceType="mediaPlayback"
-            android:exported="false">
+            android:exported="false"
+            android:stopWithTask="false">
 
             <!-- AJOUT : Intent filter pour les boutons média Bluetooth -->
             <intent-filter>
