@@ -392,7 +392,8 @@ class MusicService : Service() {
     private fun saveCurrentSongToSettings() {
         if (::settingsManager.isInitialized) {
             currentSong?.let { song ->
-                settingsManager.saveLastPlayedState(song.id, currentPosition)
+                settingsManager.lastPlayedSongId = song.id
+                settingsManager.lastPlayedPosition = currentPosition
                 android.util.Log.d("MusicService", "Sauvegarde: ${song.title} à ${currentPosition}ms")
             }
         }
@@ -400,8 +401,8 @@ class MusicService : Service() {
     // Save last played song when it changes
     fun saveLastPlayedSong(settingsManager: SettingsManager) {
         currentSong?.let { song ->
-            settingsManager.saveLastPlayedState(song.id, currentPosition)
-            android.util.Log.d("MusicService", "Sauvegarde manuelle: ${song.title} à ${currentPosition}ms")
+            settingsManager.lastPlayedSongId = song.id
+            settingsManager.lastPlayedPosition = currentPosition
         }
     }
     fun playSong(song: Song) {
@@ -591,9 +592,6 @@ class MusicService : Service() {
             }
         }
 
-        // ✅ SAUVEGARDER l'état actuel avant destruction
-        saveCurrentSongToSettings()
-
         try {
             if (isBluetoothReceiverRegistered) {
                 unregisterReceiver(bluetoothReceiver)
@@ -628,11 +626,6 @@ class MusicService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        
-        // ✅ SAUVEGARDER l'état avant que l'app ne soit tuée
-        saveCurrentSongToSettings()
-        android.util.Log.d("MusicService", "Task removed - État sauvegardé")
-        
         stopPlayback()
     }
 }

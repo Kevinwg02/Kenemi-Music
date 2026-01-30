@@ -133,7 +133,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.collectAsState
 
-
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
 fun customColorScheme() = darkColorScheme(
@@ -345,8 +344,6 @@ class MainActivity : ComponentActivity() {
         startService(serviceIntent)
         bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
 
-        // Note: ProcessLifecycleOwner requires additional dependency - using activity lifecycle instead
-
         checkPermission()
 
         // Demander la permission de notification sur Android 13+
@@ -363,24 +360,25 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(player) {
                 player?.setStatsManager(statsManager)
                 player?.setSettingsManager(settingsManager)
-                
-                // ✅ SAUVEGARDER périodiquement la position de lecture
-                if (player != null) {
-                    while (true) {
-                        delay(5000) // Sauvegarder toutes les 5 secondes
-                        player?.updatePosition()
-                        if (player.isPlaying) {
-                            player.saveLastPlayedSong(settingsManager)
-                        }
-                    }
-                }
             }
 
             // In onCreate, after songs are loaded and service is bound, add:
             LaunchedEffect(musicService, songs) {
                 val service = musicService
                 if (service != null && songs.isNotEmpty()) {
-                    restoreLastPlayedSong(service, songs)
+                    val lastSongId = settingsManager.lastPlayedSongId
+                    if (lastSongId != -1L) {
+                        val lastSong = songs.firstOrNull { it.id == lastSongId }
+                        if (lastSong != null) {
+                            service.setPlaylist(songs)
+                            service.playSong(lastSong)
+                            service.pause() // Start paused
+                            val savedPosition = settingsManager.lastPlayedPosition
+                            if (savedPosition > 0) {
+                                service.seekTo(savedPosition)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -667,60 +665,8 @@ class MainActivity : ComponentActivity() {
         artists.addAll(artistList)
     }
 
-    private fun restoreLastPlayedSong(service: MusicService, songs: List<Song>) {
-        try {
-            android.util.Log.d("MainActivity", "Tentative de restauration...")
-            
-            val lastSongId = settingsManager.lastPlayedSongId
-            val savedPosition = settingsManager.lastPlayedPosition
-            
-            android.util.Log.d("MainActivity", "ID chanson: $lastSongId, Position: $savedPosition")
-            
-            if (lastSongId != -1L) {
-                val lastSong = songs.firstOrNull { it.id == lastSongId }
-                if (lastSong != null) {
-                    android.util.Log.d("MainActivity", "Restauration trouvée: ${lastSong.title}")
-                    service.setPlaylist(songs)
-                    service.playSong(lastSong)
-                    service.pause() // Start paused
-                    
-                    if (savedPosition > 0) {
-                        // Utiliser un delay pour s'assurer que le mediaPlayer est prêt
-                        kotlinx.coroutines.GlobalScope.launch {
-                            kotlinx.coroutines.delay(500)
-                            service.seekTo(savedPosition)
-                            android.util.Log.d("MainActivity", "Position restaurée: ${savedPosition}ms")
-                        }
-                    }
-                } else {
-                    android.util.Log.w("MainActivity", "Chanson précédente non trouvée dans la bibliothèque (ID: $lastSongId)")
-                }
-            } else {
-                android.util.Log.d("MainActivity", "Aucune chanson précédente à restaurer")
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Erreur lors de la restauration de la chanson", e)
-        }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        // ✅ SAUVEGARDER l'état lorsque l'activité passe en arrière-plan
-        musicService?.let { service ->
-            service.saveLastPlayedSong(settingsManager)
-            android.util.Log.d("MainActivity", "État sauvegardé lors de onPause")
-        }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
-        
-        // ✅ SAUVEGARDER l'état actuel avant destruction de l'activité
-        musicService?.let { service ->
-            service.saveLastPlayedSong(settingsManager)
-            android.util.Log.d("MainActivity", "État sauvegardé lors de onDestroy")
-        }
-        
         if (serviceBound) {
             unbindService(serviceConnection)
             serviceBound = false
@@ -1723,13 +1669,13 @@ class MainActivity : ComponentActivity() {
             statsManager.getTotalStats()
         }
         val topSongs = remember(songs, refreshTrigger) {
-            statsManager.getTopSongs(songs, 5)
+            statsManager.getTopSongs(songs, 10)
         }
         val recentlyPlayed = remember(songs, refreshTrigger) {
-            statsManager.getRecentlyPlayed(songs, 5)
+            statsManager.getRecentlyPlayed(songs, 10)
         }
         val topArtists = remember(songs, refreshTrigger) {
-            statsManager.getTopArtists(songs, 5)
+            statsManager.getTopArtists(songs, 10)
         }
 
         var showClearDialog by remember { mutableStateOf(false) }
