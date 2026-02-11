@@ -132,35 +132,36 @@ import kotlin.random.Random
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.collectAsState
+import android.util.Log
 
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
 fun customColorScheme() = darkColorScheme(
-    primary = Color(0xFF03A9F4),           // Nice blue instead of gray
-    onPrimary = Color(0xFF000000),           // Black text on blue buttons
-    primaryContainer = Color(0xFF01579B),      // Darker blue for containers
-    onPrimaryContainer = Color(0xFFE1F5FE),    // Light text on dark blue
-    
-    secondary = Color(0xFF00BCD4),             // Cyan accent
-    onSecondary = Color(0xFF000000),           // Black text on cyan
-    
-    tertiary = Color(0xFFFF5722),              // Orange accent instead of purple
-    onTertiary = Color(0xFF000000),           // Black text on orange
-    
-    surface = Color(0xFF000000),              // ✅ TRUE BLACK background
-    onSurface = Color(0xFFFFFFFF),             // White text on black
-    surfaceVariant = Color(0xFF1A1A1A),        // Slightly lighter black
-    onSurfaceVariant = Color(0xFFB0B0B0),     // Gray text for secondary info
-    
-    background = Color(0xFF000000),            // True black background
-    onBackground = Color(0xFFFFFFFF),           // White text
-    
-    outline = Color(0xFF333333),               // Subtle borders
-    outlineVariant = Color(0xFF2A2A2A),        // Even more subtle borders
-    
-    scrim = Color(0x99000000),                // Overlay for modals
-    
-    surfaceTint = Color(0xFF03A9F4)            // Blue tint for surfaces
+    primary = Color(0xFF03A9F4),
+    onPrimary = Color(0xFF000000),
+    primaryContainer = Color(0xFF01579B),
+    onPrimaryContainer = Color(0xFFE1F5FE),
+
+    secondary = Color(0xFF00BCD4),
+    onSecondary = Color(0xFF000000),
+
+    tertiary = Color(0xFFFF5722),
+    onTertiary = Color(0xFF000000),
+
+    surface = Color(0xFF000000),
+    onSurface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFF1A1A1A),
+    onSurfaceVariant = Color(0xFFB0B0B0),
+
+    background = Color(0xFF000000),
+    onBackground = Color(0xFFFFFFFF),
+
+    outline = Color(0xFF333333),
+    outlineVariant = Color(0xFF2A2A2A),
+
+    scrim = Color(0x99000000),
+
+    surfaceTint = Color(0xFF03A9F4)
 )
 
 data class Song(
@@ -195,6 +196,7 @@ data class MusicFolder(
 enum class RepeatMode {
     OFF, ONE, ALL
 }
+
 @Composable
 fun PermissionRequiredMessage(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -224,7 +226,7 @@ fun PermissionRequiredMessage(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Pour afficher $title, vous devez autoriser l'accès aux fichiers audio dans les paramètres de l'application. OU",
+                text = "Pour afficher $title, vous devez autoriser l'accès aux fichiers audio dans les paramètres de l'application.",
                 fontSize = 16.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -257,7 +259,6 @@ fun PermissionRequiredMessage(
     }
 }
 
-// Fonction pour ouvrir les paramètres de l'app
 private fun openAppSettings(context: Context) {
     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
         data = Uri.fromParts("package", context.packageName, null)
@@ -265,6 +266,7 @@ private fun openAppSettings(context: Context) {
     }
     context.startActivity(intent)
 }
+
 class MainActivity : ComponentActivity() {
     private val songs = mutableStateListOf<Song>()
     private val albums = mutableStateListOf<Album>()
@@ -277,18 +279,26 @@ class MainActivity : ComponentActivity() {
     private var serviceBound = false
     private var showQueueScreen by mutableStateOf(false)
     private var showLyricsScreen by mutableStateOf(false)
+
+    // ✅ FIX: Initialize these BEFORE onCreate
     private lateinit var lyricsService: LyricsService
     private lateinit var playlistManager: PlaylistManager
     private lateinit var settingsManager: SettingsManager
+    private lateinit var statsManager: StatsManager
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            Log.d("MainActivity", "Service connected")
             val binder = service as MusicService.MusicBinder
             musicService = binder.getService()
             serviceBound = true
+
+            // ✅ FIX: Restore last song AFTER service is connected AND songs are loaded
+            restoreLastPlayedSong()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            Log.d("MainActivity", "Service disconnected")
             serviceBound = false
             musicService = null
         }
@@ -297,56 +307,49 @@ class MainActivity : ComponentActivity() {
     private val requestPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        Log.d("MainActivity", "Permission result: $isGranted")
         hasPermission = isGranted
         if (isGranted) {
-            loadSongs()
-            loadAlbums()
-            loadArtists()
-            loadFolders()
+            loadAppDataAsync()
         }
-    }
-
-    private fun forceScanMusic() {
-        loadSongs()
-        loadAlbums()
-        loadArtists()
-        loadFolders()
     }
 
     private val requestNotificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        // Permission notification accordée ou refusée
+        Log.d("MainActivity", "Notification permission: $isGranted")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d("MainActivity", "onCreate started")
 
-        // Initialize services
-        ImageServiceSingleton.init(this)
-        playlistManager = PlaylistManager(this)
-        settingsManager = SettingsManager(this)
-        lyricsService = LyricsService(this)
+        // ✅ FIX: Initialize services FIRST
+        try {
+            ImageServiceSingleton.init(this)
+            settingsManager = SettingsManager(this)
+            playlistManager = PlaylistManager(this)
+            statsManager = StatsManager(this)
+            lyricsService = LyricsService(this)
 
-        val statsManager = StatsManager(this)
+            Log.d("MainActivity", "All services initialized successfully")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error initializing services", e)
+        }
+
+        // Load saved data
         playlists.addAll(playlistManager.loadPlaylists())
         favorites.addAll(playlistManager.loadFavorites())
 
-        playlistManager = PlaylistManager(this)
-        settingsManager = SettingsManager(this)
-        lyricsService = LyricsService(this)
-
-        // Load data in background
-        loadAppDataAsync()
-
-        // Démarrer et lier le service de musique
+        // Start and bind music service
         val serviceIntent = Intent(this, MusicService::class.java)
         startService(serviceIntent)
         bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
 
+        // Check permissions
         checkPermission()
 
-        // Demander la permission de notification sur Android 13+
+        // Request notification permission
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -354,65 +357,43 @@ class MainActivity : ComponentActivity() {
         setContent {
             val player = musicService
             val imageService = ImageServiceSingleton.getArtistImageService()
-            // ✅ DYNAMIC THEME: Read from settings on every recomposition
-            // ✅ DYNAMIC THEME: Use the same state as SettingsScreen
             val isDarkThemeState = remember { mutableStateOf(settingsManager.isDarkTheme) }
-            LaunchedEffect(player) {
-                player?.setStatsManager(statsManager)
-                player?.setSettingsManager(settingsManager)
-            }
 
-            // In onCreate, after songs are loaded and service is bound, add:
-            LaunchedEffect(musicService, songs) {
-                val service = musicService
-                if (service != null && songs.isNotEmpty()) {
-                    val lastSongId = settingsManager.lastPlayedSongId
-                    if (lastSongId != -1L) {
-                        val lastSong = songs.firstOrNull { it.id == lastSongId }
-                        if (lastSong != null) {
-                            service.setPlaylist(songs)
-                            service.playSong(lastSong)
-                            service.pause() // Start paused
-                            val savedPosition = settingsManager.lastPlayedPosition
-                            if (savedPosition > 0) {
-                                service.seekTo(savedPosition)
-                            }
-                        }
-                    }
+            // ✅ FIX: Set managers when service becomes available
+            LaunchedEffect(player) {
+                player?.let {
+                    it.setStatsManager(statsManager)
+                    it.setSettingsManager(settingsManager)
+                    Log.d("MainActivity", "Managers set on service")
                 }
             }
 
             MaterialTheme(
                 colorScheme = if (isDarkThemeState.value) customColorScheme()
                 else lightColorScheme(
-                    primary = Color(0xFF03A9F4),           // Same blue as dark theme
-                    onPrimary = Color(0xFFFFFFFF),           // White text on blue
-                    primaryContainer = Color(0xFFE1F5FE),    // Light blue container
-                    onPrimaryContainer = Color(0xFF01579B),  // Dark blue text
-
-                    secondary = Color(0xFF00BCD4),             // Cyan accent
-                    onSecondary = Color(0xFF000000),           // Black text on cyan
-
-                    tertiary = Color(0xFFFF5722),              // Orange accent
-                    onTertiary = Color(0xFFFFFFFF),           // White text on orange
-
-                    surface = Color(0xFFFFFFFF),              // True white background
-                    onSurface = Color(0xFF000000),             // Black text
-                    surfaceVariant = Color(0xFFF5F5F5),        // Light gray for cards
-                    onSurfaceVariant = Color(0xFF757575),     // Dark gray text
-
-                    background = Color(0xFFFFFFFF),            // White background
-                    onBackground = Color(0xFF000000),           // Black text
-
-                    outline = Color(0xFFE0E0E0),               // Light borders
-                    outlineVariant = Color(0xFFEEEEEE),        // Even lighter borders
-
-                    surfaceTint = Color(0xFF03A9F4)            // Blue tint for surfaces
+                    primary = Color(0xFF03A9F4),
+                    onPrimary = Color(0xFFFFFFFF),
+                    primaryContainer = Color(0xFFE1F5FE),
+                    onPrimaryContainer = Color(0xFF01579B),
+                    secondary = Color(0xFF00BCD4),
+                    onSecondary = Color(0xFF000000),
+                    tertiary = Color(0xFFFF5722),
+                    onTertiary = Color(0xFFFFFFFF),
+                    surface = Color(0xFFFFFFFF),
+                    onSurface = Color(0xFF000000),
+                    surfaceVariant = Color(0xFFF5F5F5),
+                    onSurfaceVariant = Color(0xFF757575),
+                    background = Color(0xFFFFFFFF),
+                    onBackground = Color(0xFF000000),
+                    outline = Color(0xFFE0E0E0),
+                    outlineVariant = Color(0xFFEEEEEE),
+                    surfaceTint = Color(0xFF03A9F4)
                 )
             ) {
                 if (player == null) {
                     Box(
-                        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator()
                     }
@@ -432,7 +413,6 @@ class MainActivity : ComponentActivity() {
                         isDarkThemeState = isDarkThemeState,
                         lyricsService = lyricsService,
                         onRequestPermission = { requestPermission.launch(getPermissionString()) },
-                        // Sauvegarder lors de la création
                         onCreatePlaylist = { name, songIds ->
                             val newPlaylist = Playlist(
                                 id = System.currentTimeMillis().toString(),
@@ -442,17 +422,16 @@ class MainActivity : ComponentActivity() {
                             playlists.add(newPlaylist)
                             playlistManager.addPlaylist(newPlaylist)
                         },
-                        // Sauvegarder lors de la suppression
                         onDeletePlaylist = { playlist ->
                             playlists.remove(playlist)
                             playlistManager.deletePlaylist(playlist.id)
                         },
-                        //  Sauvegarder lors de la mise à jour
                         onUpdatePlaylist = { playlistId, newName, newSongIds ->
                             val index = playlists.indexOfFirst { it.id == playlistId }
                             if (index != -1) {
                                 playlists[index] = playlists[index].copy(
-                                    name = newName, songIds = newSongIds
+                                    name = newName,
+                                    songIds = newSongIds
                                 )
                                 playlistManager.updatePlaylist(playlistId, newName, newSongIds)
                             }
@@ -464,12 +443,58 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 favorites.remove(songId)
                             }
-                        })
+                        }
+                    )
                 }
             }
         }
     }
 
+    // ✅ FIX: New function to restore last played song
+    private fun restoreLastPlayedSong() {
+        val service = musicService
+        if (service == null) {
+            Log.w("MainActivity", "Cannot restore: service is null")
+            return
+        }
+
+        if (songs.isEmpty()) {
+            Log.w("MainActivity", "Cannot restore: songs list is empty")
+            return
+        }
+
+        try {
+            val lastSongId = settingsManager.lastPlayedSongId
+            Log.d("MainActivity", "Attempting to restore song ID: $lastSongId")
+
+            if (lastSongId != -1L) {
+                val lastSong = songs.firstOrNull { it.id == lastSongId }
+                if (lastSong != null) {
+                    Log.d("MainActivity", "Restoring: ${lastSong.title}")
+                    service.setPlaylist(songs)
+                    service.playSong(lastSong)
+                    service.pause() // Start paused
+
+                    val savedPosition = settingsManager.lastPlayedPosition
+                    if (savedPosition > 0) {
+                        service.seekTo(savedPosition)
+                        Log.d("MainActivity", "Restored position: ${savedPosition}ms")
+                    }
+                } else {
+                    Log.w("MainActivity", "Last song not found in current library")
+                }
+            } else {
+                Log.d("MainActivity", "No last played song saved")
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error restoring last song", e)
+        }
+    }
+
+    private fun forceScanMusic() {
+        Log.d("MainActivity", "Force scan requested")
+        loadAppDataAsync()
+    }
 
     private fun getPermissionString(): String {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -481,32 +506,40 @@ class MainActivity : ComponentActivity() {
 
     private fun checkPermission() {
         hasPermission = ContextCompat.checkSelfPermission(
-            this, getPermissionString()
+            this,
+            getPermissionString()
         ) == PackageManager.PERMISSION_GRANTED
+
+        Log.d("MainActivity", "Has permission: $hasPermission")
 
         if (hasPermission) {
             loadAppDataAsync()
         }
     }
 
-    // OPTIMIZED: Load all data asynchronously
     private fun loadAppDataAsync() {
+        Log.d("MainActivity", "Loading app data...")
         val scope = CoroutineScope(Dispatchers.IO)
         scope.launch {
             try {
-                // Load data in parallel
-                val songsDeferred = async(Dispatchers.IO) { loadSongs() }
-                val albumsDeferred = async(Dispatchers.IO) { loadAlbums() }
-                val artistsDeferred = async(Dispatchers.IO) { loadArtists() }
-                val foldersDeferred = async(Dispatchers.IO) { loadFolders() }
+                val songsDeferred = async { loadSongs() }
+                val albumsDeferred = async { loadAlbums() }
+                val artistsDeferred = async { loadArtists() }
+                val foldersDeferred = async { loadFolders() }
 
-                // Wait for all to complete
                 songsDeferred.await()
                 albumsDeferred.await()
                 artistsDeferred.await()
                 foldersDeferred.await()
+
+                Log.d("MainActivity", "Data loaded: ${songs.size} songs")
+
+                // ✅ FIX: Try to restore after songs are loaded
+                launch(Dispatchers.Main) {
+                    restoreLastPlayedSong()
+                }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("MainActivity", "Error loading data", e)
             }
         }
     }
@@ -514,176 +547,14 @@ class MainActivity : ComponentActivity() {
     private fun loadSongs() {
         val songList = mutableListOf<Song>()
 
-        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
-        } else {
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-        }
-
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.DATA
-        )
-
-        // Filter to only include files from Music folder
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DATA} LIKE ?"
-
-        val selectionArgs = arrayOf("%${settingsManager.musicFolderName}%")
-        contentResolver.query(
-            collection, projection, selection, selectionArgs, "${MediaStore.Audio.Media.TITLE} ASC"
-        )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-            val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-            val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
-
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idColumn)
-                val title = cursor.getString(titleColumn)
-                val artist = cursor.getString(artistColumn)
-                val duration = cursor.getLong(durationColumn)
-                val albumId = cursor.getLong(albumIdColumn)
-                val album = cursor.getString(albumColumn)
-                val dataPath = cursor.getString(dataColumn)
-
-                // VÉRIFICATION 1 : Filtrer les fichiers avec durée invalide
-                if (duration <= 0) {
-                    continue // Sauter ce fichier
-                }
-
-                val uri = ContentUris.withAppendedId(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id
-                )
-
-                // VÉRIFICATION 2 : Vérifier si le fichier est accessible
-                try {
-                    contentResolver.openInputStream(uri)?.close()
-                } catch (e: Exception) {
-                    continue // Fichier inaccessible, on le saute
-                }
-
-                // Si on arrive ici, le fichier est valide, on l'ajoute
-                songList.add(
-                    Song(
-                        id,
-                        title,
-                        artist ?: "Artiste inconnu",
-                        duration,
-                        uri,
-                        albumId,
-                        album ?: "Album inconnu"
-                    )
-                )
-            }
-        }
-
-        songs.clear()
-        songs.addAll(songList)
-        loadFolders()
-    }
-
-    private fun loadAlbums() {
-        val albumMap = mutableMapOf<Long, Album>()
-
-        val collection = MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI
-
-        val projection = arrayOf(
-            MediaStore.Audio.Albums._ID,
-            MediaStore.Audio.Albums.ALBUM,
-            MediaStore.Audio.Albums.ARTIST,
-            MediaStore.Audio.Albums.NUMBER_OF_SONGS
-        )
-
-        contentResolver.query(
-            collection, projection, null, null, "${MediaStore.Audio.Albums.ALBUM} ASC"
-        )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums._ID)
-            val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.ALBUM)
-            val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.ARTIST)
-            val countColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.NUMBER_OF_SONGS)
-
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idColumn)
-                val album = cursor.getString(albumColumn)
-                val artist = cursor.getString(artistColumn)
-                val count = cursor.getInt(countColumn)
-
-                val artUri = ContentUris.withAppendedId(
-                    Uri.parse("content://media/external/audio/albumart"), id
-                )
-
-                albumMap[id] =
-                    Album(id, album ?: "Album inconnu", artist ?: "Artiste inconnu", count, artUri)
-            }
-        }
-
-        albums.clear()
-        albums.addAll(albumMap.values)
-    }
-
-    private fun loadArtists() {
-        val artistList = mutableListOf<Artist>()
-
-        val collection = MediaStore.Audio.Artists.EXTERNAL_CONTENT_URI
-
-        val projection = arrayOf(
-            MediaStore.Audio.Artists._ID,
-            MediaStore.Audio.Artists.ARTIST,
-            MediaStore.Audio.Artists.NUMBER_OF_ALBUMS,
-            MediaStore.Audio.Artists.NUMBER_OF_TRACKS
-        )
-
-        contentResolver.query(
-            collection, projection, null, null, "${MediaStore.Audio.Artists.ARTIST} ASC"
-        )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists._ID)
-            val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.ARTIST)
-            val albumCountColumn =
-                cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_ALBUMS)
-            val trackCountColumn =
-                cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_TRACKS)
-
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idColumn)
-                val artist = cursor.getString(artistColumn)
-                val albumCount = cursor.getInt(albumCountColumn)
-                val trackCount = cursor.getInt(trackCountColumn)
-
-                artistList.add(Artist(id, artist ?: "Artiste inconnu", albumCount, trackCount))
-            }
-        }
-
-        artists.clear()
-        artists.addAll(artistList)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        if (serviceBound) {
-            unbindService(serviceConnection)
-            serviceBound = false
-        }
-    }
-
-    private fun loadFolders() {
-        val folderMap = mutableMapOf<String, MutableList<Song>>()
-
-        // Grouper les chansons par dossier en utilisant les chemins réels des fichiers
-        contentResolver.query(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        try {
+            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
             } else {
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-            },
-            arrayOf(
+            }
+
+            val projection = arrayOf(
                 MediaStore.Audio.Media._ID,
                 MediaStore.Audio.Media.TITLE,
                 MediaStore.Audio.Media.ARTIST,
@@ -691,64 +562,251 @@ class MainActivity : ComponentActivity() {
                 MediaStore.Audio.Media.ALBUM_ID,
                 MediaStore.Audio.Media.ALBUM,
                 MediaStore.Audio.Media.DATA
-            ),
-            "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DATA} LIKE ?",
-            arrayOf("%${settingsManager.musicFolderName}%"),
-            "${MediaStore.Audio.Media.DATA} ASC"
-        )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-            val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-            val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+            )
 
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idColumn)
-                val title = cursor.getString(titleColumn)
-                val artist = cursor.getString(artistColumn)
-                val duration = cursor.getLong(durationColumn)
-                val albumId = cursor.getLong(albumIdColumn)
-                val album = cursor.getString(albumColumn)
-                val dataPath = cursor.getString(dataColumn)
+            val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DATA} LIKE ?"
+            val selectionArgs = arrayOf("%${settingsManager.musicFolderName}%")
 
-                // Filtrer uniquement les fichiers dans le dossier Music
-                if (duration <= 0 || !dataPath.contains("/Music/", ignoreCase = true)) {
-                    continue
+            contentResolver.query(
+                collection,
+                projection,
+                selection,
+                selectionArgs,
+                "${MediaStore.Audio.Media.TITLE} ASC"
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+                val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val title = cursor.getString(titleColumn) ?: continue
+                    val artist = cursor.getString(artistColumn) ?: "Artiste inconnu"
+                    val duration = cursor.getLong(durationColumn)
+                    val albumId = cursor.getLong(albumIdColumn)
+                    val album = cursor.getString(albumColumn) ?: "Album inconnu"
+                    val dataPath = cursor.getString(dataColumn) ?: continue
+
+                    if (duration <= 0) continue
+
+                    val uri = ContentUris.withAppendedId(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        id
+                    )
+
+                    try {
+                        contentResolver.openInputStream(uri)?.close()
+                    } catch (e: Exception) {
+                        continue
+                    }
+
+                    songList.add(
+                        Song(id, title, artist, duration, uri, albumId, album)
+                    )
                 }
+            }
 
-                val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
-                val song = Song(id, title, artist ?: "Artiste inconnu", duration, uri, albumId, album ?: "Album inconnu")
-                
-                val file = File(dataPath)
-                val folderFile = file.parentFile ?: continue
-                
-                // Ne garder que les dossiers dans Music
-                if (!folderFile.absolutePath.contains("/Music/", ignoreCase = true)) {
-                    continue
-                }
+            songs.clear()
+            songs.addAll(songList)
+            Log.d("MainActivity", "Loaded ${songs.size} songs")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error loading songs", e)
+        }
+    }
 
-                val folderPath = folderFile.absolutePath
-                if (!folderMap.containsKey(folderPath)) {
-                    folderMap[folderPath] = mutableListOf()
+    private fun loadAlbums() {
+        val albumMap = mutableMapOf<Long, Album>()
+
+        try {
+            val collection = MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI
+            val projection = arrayOf(
+                MediaStore.Audio.Albums._ID,
+                MediaStore.Audio.Albums.ALBUM,
+                MediaStore.Audio.Albums.ARTIST,
+                MediaStore.Audio.Albums.NUMBER_OF_SONGS
+            )
+
+            contentResolver.query(
+                collection,
+                projection,
+                null,
+                null,
+                "${MediaStore.Audio.Albums.ALBUM} ASC"
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums._ID)
+                val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.ALBUM)
+                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.ARTIST)
+                val countColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.NUMBER_OF_SONGS)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val album = cursor.getString(albumColumn) ?: "Album inconnu"
+                    val artist = cursor.getString(artistColumn) ?: "Artiste inconnu"
+                    val count = cursor.getInt(countColumn)
+
+                    val artUri = ContentUris.withAppendedId(
+                        Uri.parse("content://media/external/audio/albumart"),
+                        id
+                    )
+
+                    albumMap[id] = Album(id, album, artist, count, artUri)
                 }
-                folderMap[folderPath]?.add(song)
+            }
+
+            albums.clear()
+            albums.addAll(albumMap.values)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error loading albums", e)
+        }
+    }
+
+    private fun loadArtists() {
+        val artistList = mutableListOf<Artist>()
+
+        try {
+            val collection = MediaStore.Audio.Artists.EXTERNAL_CONTENT_URI
+            val projection = arrayOf(
+                MediaStore.Audio.Artists._ID,
+                MediaStore.Audio.Artists.ARTIST,
+                MediaStore.Audio.Artists.NUMBER_OF_ALBUMS,
+                MediaStore.Audio.Artists.NUMBER_OF_TRACKS
+            )
+
+            contentResolver.query(
+                collection,
+                projection,
+                null,
+                null,
+                "${MediaStore.Audio.Artists.ARTIST} ASC"
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists._ID)
+                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.ARTIST)
+                val albumCountColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_ALBUMS)
+                val trackCountColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_TRACKS)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val artist = cursor.getString(artistColumn) ?: "Artiste inconnu"
+                    val albumCount = cursor.getInt(albumCountColumn)
+                    val trackCount = cursor.getInt(trackCountColumn)
+
+                    artistList.add(Artist(id, artist, albumCount, trackCount))
+                }
+            }
+
+            artists.clear()
+            artists.addAll(artistList)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error loading artists", e)
+        }
+    }
+
+
+    // ✅ FIXED: Only ONE loadFolders function
+    private fun loadFolders() {
+        val folderMap = mutableMapOf<String, MutableList<Song>>()
+
+        try {
+            contentResolver.query(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                } else {
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                },
+                arrayOf(
+                    MediaStore.Audio.Media._ID,
+                    MediaStore.Audio.Media.TITLE,
+                    MediaStore.Audio.Media.ARTIST,
+                    MediaStore.Audio.Media.DURATION,
+                    MediaStore.Audio.Media.ALBUM_ID,
+                    MediaStore.Audio.Media.ALBUM,
+                    MediaStore.Audio.Media.DATA
+                ),
+                "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DATA} LIKE ?",
+                arrayOf("%${settingsManager.musicFolderName}%"),
+                "${MediaStore.Audio.Media.DATA} ASC"
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+                val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val title = cursor.getString(titleColumn) ?: continue
+                    val artist = cursor.getString(artistColumn) ?: "Artiste inconnu"
+                    val duration = cursor.getLong(durationColumn)
+                    val albumId = cursor.getLong(albumIdColumn)
+                    val album = cursor.getString(albumColumn) ?: "Album inconnu"
+                    val dataPath = cursor.getString(dataColumn) ?: continue
+
+                    if (duration <= 0 || !dataPath.contains("/Music/", ignoreCase = true)) {
+                        continue
+                    }
+
+                    val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+                    val song = Song(id, title, artist, duration, uri, albumId, album)
+
+                    val file = File(dataPath)
+                    val folderFile = file.parentFile ?: continue
+
+                    if (!folderFile.absolutePath.contains("/Music/", ignoreCase = true)) {
+                        continue
+                    }
+
+                    val folderPath = folderFile.absolutePath
+                    if (!folderMap.containsKey(folderPath)) {
+                        folderMap[folderPath] = mutableListOf()
+                    }
+                    folderMap[folderPath]?.add(song)
+                }
+            }
+
+            val folderList = folderMap.map { (path, folderSongs) ->
+                val folderFile = File(path)
+                MusicFolder(path, folderFile.name, folderSongs.size)
+            }.sortedBy { it.name }
+
+            folders.clear()
+            folders.addAll(folderList)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error loading folders", e)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d("MainActivity", "onDestroy")
+
+        musicService?.let { service ->
+            service.currentSong?.let { song ->
+                settingsManager.lastPlayedSongId = song.id
+                settingsManager.lastPlayedPosition = service.currentPosition
+                Log.d("MainActivity", "Saved state: ${song.title} at ${service.currentPosition}ms")
             }
         }
 
-        // Créer la liste des dossiers
-        val folderList = folderMap.map { (path, songs) ->
-            val folderFile = File(path)
-            MusicFolder(
-                path = path, 
-                name = folderFile.name, 
-                songCount = songs.size
-            )
-        }.sortedBy { it.name }
+        if (serviceBound) {
+            unbindService(serviceConnection)
+            serviceBound = false
+        }
+    }
 
-        folders.clear()
-        folders.addAll(folderList)
+    override fun onPause() {
+        super.onPause()
+        musicService?.let { service ->
+            service.currentSong?.let { song ->
+                settingsManager.lastPlayedSongId = song.id
+                settingsManager.lastPlayedPosition = service.currentPosition
+            }
+        }
     }
 
     @Composable
@@ -782,10 +840,10 @@ class MainActivity : ComponentActivity() {
         var showLyricsScreen by remember { mutableStateOf(false) }
 
         LaunchedEffect(selectedTab) {
-            if (selectedTab == 2) selectedAlbum = null
-            if (selectedTab == 3) selectedArtist = null
-            if (selectedTab == 4) selectedPlaylist = null
-            if (selectedTab == 5) selectedFolder = null
+            if (selectedTab != 2) selectedAlbum = null
+            if (selectedTab != 3) selectedArtist = null
+            if (selectedTab != 4) selectedPlaylist = null
+            if (selectedTab != 5) selectedFolder = null
 
             showLyricsScreen = false
             showQueueScreen = false
@@ -873,8 +931,15 @@ class MainActivity : ComponentActivity() {
                         favorites = favorites,
                         onToggleFavorite = onToggleFavorite,
                         onShowLyrics = { showLyricsScreen = true },
-                        onShowQueue = { showQueueScreen = true }
-                    )
+                        onShowQueue = { showQueueScreen = true },
+                        onNavigateToArtist = { artistName ->
+                            val artist = artists.firstOrNull { it.name == artistName }
+                            if (artist != null) {
+                                selectedArtist = artist
+                                selectedTab = 3  // Navigate to artists tab
+                            }
+                        }
+                        )
 
                     1 -> SongListScreen(
                         songs = songs,
@@ -2529,7 +2594,8 @@ class MainActivity : ComponentActivity() {
         favorites: List<Long>,
         onToggleFavorite: (Long) -> Unit,
         onShowLyrics: () -> Unit,
-        onShowQueue: () -> Unit
+        onShowQueue: () -> Unit,
+        onNavigateToArtist: ((String) -> Unit)? = null
     ) {
         val currentSong = musicPlayer.currentSong
         val isPlaying = musicPlayer.isPlaying
@@ -2620,7 +2686,7 @@ class MainActivity : ComponentActivity() {
 
                 Text(
                     text = songTitle,
-                    fontSize = 24.sp,
+                    fontSize = 38.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -2629,7 +2695,16 @@ class MainActivity : ComponentActivity() {
                 Text(
                     text = artistName,
                     fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.primary,  // ✅ Changed to primary color
+                    modifier = Modifier.clickable(
+                        enabled = currentSong != null && artistName != "Sélectionnez une chanson"
+                    ) {
+                        currentSong?.let {
+                            onNavigateToArtist?.invoke(it.artist)
+                        }
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Spacer(modifier = Modifier.height(2.dp))

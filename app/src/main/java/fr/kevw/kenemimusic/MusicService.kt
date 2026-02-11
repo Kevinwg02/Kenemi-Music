@@ -21,6 +21,7 @@ import android.os.Build
 import android.os.IBinder
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -406,6 +407,8 @@ class MusicService : Service() {
         }
     }
     fun playSong(song: Song) {
+        Log.d("MusicService", "playSong called: ${song.title}")
+
         if (!requestAudioFocus()) {
             return
         }
