@@ -16,9 +16,11 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
-import android.os.Binder
+import android.net.Uri
 import android.os.Build
+import android.os.Binder
 import android.os.IBinder
+import android.provider.MediaStore
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
@@ -31,6 +33,18 @@ import androidx.media.app.NotificationCompat.MediaStyle
 class MusicService : Service() {
     private val binder = MusicBinder()
     private lateinit var settingsManager: SettingsManager
+    private fun updateWidget() {
+        try {
+            val progress = if (duration > 0) {
+                ((currentPosition.toFloat() / duration.toFloat()) * 100).toInt()
+            } else 0
+
+            MusicWidgetProvider.updateWidget(this, currentSong, isPlaying, progress)
+            Log.d("MusicService", "Widget updated: ${currentSong?.title}, playing=$isPlaying, progress=$progress")
+        } catch (e: Exception) {
+            Log.e("MusicService", "Error updating widget", e)
+        }
+    }
     private var mediaPlayer: MediaPlayer? = null
     var currentSong: Song? = null
     var isPlaying by mutableStateOf(false)
@@ -63,26 +77,30 @@ class MusicService : Service() {
     private lateinit var statsManager: StatsManager
     private var songStartTime: Long = 0
 
-    companion object {
+companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "music_channel"
         const val ACTION_PLAY_PAUSE = "ACTION_PLAY_PAUSE"
         const val ACTION_NEXT = "ACTION_NEXT"
         const val ACTION_PREVIOUS = "ACTION_PREVIOUS"
         const val ACTION_STOP = "ACTION_STOP"
+        const val ACTION_PLAY_SPECIFIC_SONG = "ACTION_PLAY_SPECIFIC_SONG"
     }
 
     inner class MusicBinder : Binder() {
         fun getService(): MusicService = this@MusicService
     }
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    override fun onBind(intent: Intent?): IBinder {
+        return binder
+    }
 
-    override fun onCreate() {
+override fun onCreate() {
         super.onCreate()
 
-        // ✅ INITIALISER StatsManager
+        // ✅ INITIALISER les managers
         statsManager = StatsManager(this)
+        settingsManager = SettingsManager(this)
 
         createNotificationChannel()
         setupMediaSession()
@@ -286,7 +304,7 @@ class MusicService : Service() {
         mediaSession.setPlaybackState(playbackState)
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_PLAY_PAUSE -> {
                 if (isPlaying) pause() else resume()
@@ -294,6 +312,12 @@ class MusicService : Service() {
             ACTION_NEXT -> playNext()
             ACTION_PREVIOUS -> playPrevious()
             ACTION_STOP -> stopPlayback()
+            ACTION_PLAY_SPECIFIC_SONG -> {
+                val songId = intent.getLongExtra("song_id", -1L)
+                if (songId != -1L) {
+                    playSongFromId(songId)
+                }
+            }
         }
         return START_STICKY
     }
@@ -453,7 +477,108 @@ class MusicService : Service() {
         } catch (e: Exception) {
             e.printStackTrace()
             handlePlaybackError(song)
+}
+        updateWidget()
+    }
+
+    private fun playSongFromId(songId: Long) {
+        Log.d("MusicService", "playSongFromId called: songId=$songId")
+        
+        // S'assurer que le service est en premier plan
+        if (!isPlaying && currentSong == null) {
+            try {
+                startForeground(NOTIFICATION_ID, buildNotification())
+                Log.d("MusicService", "Started foreground service")
+            } catch (e: Exception) {
+                Log.e("MusicService", "Error starting foreground service", e)
+            }
         }
+        
+        // Chercher la chanson dans la playlist actuelle
+        val song = playlist.find { it.id == songId }
+        if (song != null) {
+            Log.d("MusicService", "Found song in current playlist: ${song.title}")
+            playSong(song)
+        } else {
+            // Si la chanson n'est pas dans la playlist, charger toutes les chansons
+            Log.d("MusicService", "Song not in playlist, loading all songs")
+            loadAllSongsAndPlay(songId)
+        }
+    }
+
+    private fun loadAllSongsAndPlay(songId: Long) {
+        Thread {
+            try {
+                val allSongs = mutableListOf<Song>()
+                val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                } else {
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                }
+
+                val projection = arrayOf(
+                    MediaStore.Audio.Media._ID,
+                    MediaStore.Audio.Media.TITLE,
+                    MediaStore.Audio.Media.ARTIST,
+                    MediaStore.Audio.Media.DURATION,
+                    MediaStore.Audio.Media.ALBUM_ID,
+                    MediaStore.Audio.Media.ALBUM
+                )
+
+                val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+                val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
+
+                contentResolver.query(
+                    collection,
+                    projection,
+                    selection,
+                    null,
+                    sortOrder
+                )?.use { cursor ->
+                    val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                    val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                    val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                    val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                    val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+                    val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+
+                    while (cursor.moveToNext()) {
+                        val id = cursor.getLong(idColumn)
+                        val title = cursor.getString(titleColumn) ?: "Titre inconnu"
+                        val artist = cursor.getString(artistColumn) ?: "Artiste inconnu"
+                        val duration = cursor.getLong(durationColumn)
+                        val albumId = cursor.getLong(albumIdColumn)
+                        val album = cursor.getString(albumColumn) ?: "Album inconnu"
+
+                        val uri = Uri.withAppendedPath(
+                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                            id.toString()
+                        )
+
+                        try {
+                            contentResolver.openInputStream(uri)?.close()
+                            allSongs.add(Song(id, title, artist, duration, uri, albumId, album))
+                        } catch (e: Exception) {
+                            continue
+                        }
+                    }
+                }
+
+                // Mettre à jour la playlist et jouer la chanson demandée
+                playlist = allSongs
+                Log.d("MusicService", "Updated playlist with ${allSongs.size} songs")
+                
+                val targetSong = allSongs.find { it.id == songId }
+                if (targetSong != null) {
+                    Log.d("MusicService", "Found target song: ${targetSong.title}")
+                    playSong(targetSong)
+                } else {
+                    Log.e("MusicService", "Target song not found in playlist: $songId")
+                }
+            } catch (e: Exception) {
+                Log.e("MusicService", "Error loading songs for widget", e)
+            }
+        }.start()
     }
 
     private fun handlePlaybackError(failedSong: Song) {
@@ -477,6 +602,7 @@ class MusicService : Service() {
         startForeground(NOTIFICATION_ID, buildNotification())
         onStateChanged?.invoke()
         saveCurrentSongToSettings()
+        updateWidget()
     }
 
     fun resume() {
@@ -487,6 +613,7 @@ class MusicService : Service() {
         updatePlaybackState()
         startForeground(NOTIFICATION_ID, buildNotification())
         onStateChanged?.invoke()
+        updateWidget()
     }
 
     fun stopPlayback() {
@@ -541,6 +668,7 @@ class MusicService : Service() {
         mediaPlayer?.let {
             if (it.isPlaying) {
                 currentPosition = it.currentPosition.toLong()
+                updateWidget()
             }
         }
     }

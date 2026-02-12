@@ -55,6 +55,26 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </service>
+        <!-- Widget Provider -->
+        <receiver
+            android:name=".MusicWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="fr.kevw.kenemimusic.WIDGET_PLAY_PAUSE" />
+                <action android:name="fr.kevw.kenemimusic.WIDGET_NEXT" />
+                <action android:name="fr.kevw.kenemimusic.WIDGET_PREVIOUS" />
+                <action android:name="fr.kevw.kenemimusic.UPDATE_WIDGET" />
+                <action android:name="fr.kevw.kenemimusic.WIDGET_SONG_CLICKED" />
+                <action android:name="fr.kevw.kenemimusic.WIDGET_OPEN_APP" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/music_widget_info" />
+        </receiver>
+        <service
+            android:name=".WidgetSongService"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
 
     </application>
 
