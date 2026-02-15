@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URL
 import java.net.URLEncoder
@@ -16,131 +15,182 @@ class LyricsService(private val context: Context) {
         context.getSharedPreferences("lyrics_cache", Context.MODE_PRIVATE)
 
     companion object {
+        private const val TAG = "LyricsService"
         private const val CACHE_PREFIX = "lyrics_"
         private const val MANUAL_PREFIX = "manual_lyrics_"
         private const val CACHE_EXPIRY_DAYS = 90
     }
 
-    // ===== RECHERCHE PRINCIPALE =====
+    // ===== RECHERCHE PRINCIPALE AMÉLIORÉE =====
     suspend fun getLyrics(title: String, artist: String): LyricsResult = withContext(Dispatchers.IO) {
         try {
             if (title.isBlank() || artist.isBlank()) {
                 return@withContext LyricsResult.Error("Titre ou artiste manquant")
             }
 
-            val cleanTitle = cleanSongTitle(title)
-            val cleanArtist = cleanArtistName(artist)
-            val cacheKey = CACHE_PREFIX + "${cleanArtist}_${cleanTitle}".lowercase()
-            val manualKey = MANUAL_PREFIX + "${cleanArtist}_${cleanTitle}".lowercase()
+            Log.d(TAG, "=== RECHERCHE POUR: '$title' par '$artist' ===")
 
-            // 1. Vérifier si paroles manuelles (PRIORITÉ)
+            // 1. Vérifier paroles manuelles (PRIORITÉ ABSOLUE)
+            val manualKey = MANUAL_PREFIX + "${artist}_${title}".lowercase()
             getManualLyrics(manualKey)?.let {
-                Log.d("LyricsService", "✓ Manual lyrics found")
+                Log.d(TAG, "✓ Paroles manuelles trouvées")
                 return@withContext LyricsResult.Success(it, source = "Manuel")
             }
 
-            // 2. Cache auto
+            // 2. Vérifier le cache
+            val cacheKey = CACHE_PREFIX + "${artist}_${title}".lowercase()
             getCachedLyrics(cacheKey)?.let { (lyrics, source) ->
-                Log.d("LyricsService", "✓ Cached lyrics from $source")
+                Log.d(TAG, "✓ Cache trouvé ($source)")
                 return@withContext LyricsResult.Success(lyrics, source)
             }
 
-            Log.d("LyricsService", "Searching: $cleanTitle - $cleanArtist")
+            // 3. STRATÉGIE DE RECHERCHE PROGRESSIVE
+            // On génère toutes les variantes AVANT de commencer
+            val searchVariants = generateSearchVariants(title, artist)
 
-            // 3. Chercher dans toutes les sources GRATUITES
-            tryAllSources(cleanArtist, cleanTitle)?.let { (lyrics, source) ->
-                cacheLyrics(cacheKey, lyrics, source)
-                return@withContext LyricsResult.Success(lyrics, source)
+            Log.d(TAG, "Génération de ${searchVariants.size} variantes de recherche")
+            searchVariants.forEachIndexed { index, (varTitle, varArtist) ->
+                Log.d(TAG, "  Variante $index: '$varTitle' - '$varArtist'")
             }
 
-            // 4. Essayer les variantes (5 variations différentes)
-            val variants = getTitleVariants(title, artist)
-            Log.d("LyricsService", "Trying ${variants.size} variants...")
+            // 4. Tester chaque variante sur TOUTES les sources
+            for ((index, variant) in searchVariants.withIndex()) {
+                val (varTitle, varArtist) = variant
+                Log.d(TAG, ">>> Test variante ${index + 1}/${searchVariants.size}: '$varTitle' - '$varArtist'")
 
-            for ((index, pair) in variants.withIndex()) {
-                val (variantTitle, variantArtist) = pair
-                Log.d("LyricsService", "Variant ${index + 1}: $variantTitle - $variantArtist")
-
-                tryAllSources(variantArtist, variantTitle)?.let { (lyrics, source) ->
-                    val variantKey = CACHE_PREFIX + "${variantArtist}_${variantTitle}".lowercase()
-                    cacheLyrics(variantKey, lyrics, source)
-                    Log.d("LyricsService", "✓ Found with variant ${index + 1}")
+                tryAllSources(varArtist, varTitle)?.let { (lyrics, source) ->
+                    // Sauvegarder dans le cache avec la clé originale
+                    cacheLyrics(cacheKey, lyrics, source)
+                    Log.d(TAG, "✓✓✓ TROUVÉ avec variante ${index + 1} sur $source")
                     return@withContext LyricsResult.Success(lyrics, source)
                 }
             }
 
-            Log.w("LyricsService", "✗ Not found after checking all sources and variants")
+            Log.w(TAG, "✗✗✗ AUCUNE PAROLE TROUVÉE après ${searchVariants.size} variantes")
             LyricsResult.NotFound
 
         } catch (e: Exception) {
-            Log.e("LyricsService", "Error", e)
+            Log.e(TAG, "Erreur lors de la recherche", e)
             LyricsResult.Error(e.message ?: "Erreur inconnue")
         }
     }
 
-    // ===== RECHERCHE MANUELLE =====
-    suspend fun searchLyricsManual(query: String): List<SearchResult> = withContext(Dispatchers.IO) {
-        try {
-            val results = mutableListOf<SearchResult>()
+    // ===== GÉNÉRATION DES VARIANTES (ORDRE OPTIMISÉ) =====
+    private fun generateSearchVariants(title: String, artist: String): List<Pair<String, String>> {
+        val variants = mutableListOf<Pair<String, String>>()
 
-            // Chercher dans Lyrics.ovh (API de suggestions gratuite)
-            searchInLyricsOvh(query)?.let { results.addAll(it) }
+        // VARIANTE 0: Original exact (souvent ignoré par erreur !)
+        variants.add(title to artist)
 
-            results.distinctBy { "${it.artist.lowercase()}-${it.title.lowercase()}" }
-        } catch (e: Exception) {
-            Log.e("LyricsService", "Manual search error", e)
-            emptyList()
+        // VARIANTE 1: Nettoyage léger (supprimer juste les espaces multiples)
+        val lightCleanTitle = title.replace(Regex("\\s+"), " ").trim()
+        val lightCleanArtist = artist.replace(Regex("\\s+"), " ").trim()
+        if (lightCleanTitle != title || lightCleanArtist != artist) {
+            variants.add(lightCleanTitle to lightCleanArtist)
         }
+
+        // VARIANTE 2: Sans parenthèses/crochets
+        val noBrackets = title
+            .replace(Regex("\\(.*?\\)"), "")
+            .replace(Regex("\\[.*?\\]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (noBrackets.isNotBlank() && noBrackets != title) {
+            variants.add(noBrackets to artist)
+        }
+
+        // VARIANTE 3: Sans featuring
+        val noFeat = title
+            .replace(Regex("(?i)\\s*[\\(\\[]?(?:feat\\.?|ft\\.?|featuring)\\s+.*?[\\)\\]]?"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (noFeat.isNotBlank() && noFeat != title) {
+            variants.add(noFeat to artist)
+        }
+
+        // VARIANTE 4: Premier artiste seul
+        val mainArtist = artist
+            .split(Regex("[,&]|(?i)feat|(?i)ft\\.?"))
+            .first()
+            .trim()
+        if (mainArtist.isNotBlank() && mainArtist != artist) {
+            variants.add(title to mainArtist)
+            if (noBrackets.isNotBlank() && noBrackets != title) {
+                variants.add(noBrackets to mainArtist)
+            }
+        }
+
+        // VARIANTE 5: Sans version/remix/edit
+        val noVersion = title
+            .replace(Regex("(?i)\\s*-?\\s*\\(?(?:version|remix|mix|edit|remaster|remastered|live|acoustic|radio).*?\\)?"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (noVersion.isNotBlank() && noVersion != title) {
+            variants.add(noVersion to artist)
+            if (mainArtist != artist) {
+                variants.add(noVersion to mainArtist)
+            }
+        }
+
+        // VARIANTE 6: Première partie du titre (avant tiret ou parenthèse)
+        val firstPart = title
+            .split(Regex("[\\(\\[-]"))
+            .first()
+            .trim()
+        if (firstPart.isNotBlank() && firstPart != title && firstPart.length >= 3) {
+            variants.add(firstPart to artist)
+            if (mainArtist != artist) {
+                variants.add(firstPart to mainArtist)
+            }
+        }
+
+        // VARIANTE 7: Nettoyage agressif (dernier recours)
+        val aggressiveTitle = title
+            .lowercase()
+            .replace(Regex("[^a-z0-9\\s]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        val aggressiveArtist = artist
+            .lowercase()
+            .replace(Regex("[^a-z0-9\\s]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (aggressiveTitle.isNotBlank() && aggressiveArtist.isNotBlank()) {
+            variants.add(aggressiveTitle to aggressiveArtist)
+        }
+
+        // Retourner sans doublons
+        return variants.distinctBy { "${it.first.lowercase()}-${it.second.lowercase()}" }
     }
 
-    // Sauvegarder des paroles manuellement
-    fun saveManualLyrics(title: String, artist: String, lyrics: String) {
-        val cleanTitle = cleanSongTitle(title)
-        val cleanArtist = cleanArtistName(artist)
-        val key = MANUAL_PREFIX + "${cleanArtist}_${cleanTitle}".lowercase()
-
-        cachePrefs.edit()
-            .putString(key, lyrics)
-            .apply()
-
-        Log.d("LyricsService", "✓ Manual lyrics saved for: $cleanTitle - $cleanArtist")
-    }
-
-    // ===== 4 SOURCES 100% GRATUITES (sans clé API) =====
+    // ===== RECHERCHE DANS TOUTES LES SOURCES =====
     private suspend fun tryAllSources(artist: String, title: String): Pair<String, String>? {
-        // SOURCE 1: Lyrics.ovh (rapide et fiable, basé sur plusieurs APIs)
+        // SOURCE 1: Lyrics.ovh
         tryLyricsOvh(artist, title)?.let {
-            Log.d("LyricsService", "✓ Found on Lyrics.ovh")
             return it to "Lyrics.ovh"
         }
 
-        // SOURCE 2: ChartLyrics (SOAP API publique, pas de limite)
+        // SOURCE 2: ChartLyrics
         tryChartLyrics(artist, title)?.let {
-            Log.d("LyricsService", "✓ Found on ChartLyrics")
             return it to "ChartLyrics"
         }
 
-        // SOURCE 3: Lyrist (API Vercel gratuite)
+        // SOURCE 3: Lyrist
         tryLyrist(artist, title)?.let {
-            Log.d("LyricsService", "✓ Found on Lyrist")
             return it to "Lyrist"
-        }
-
-        // SOURCE 4: APISEEDS (API gratuite alternative)
-        tryApiSeeds(artist, title)?.let {
-            Log.d("LyricsService", "✓ Found on API Alternative")
-            return it to "API Alternative"
         }
 
         return null
     }
 
-    // ===== API 1: LYRICS.OVH (Gratuite, sans clé) =====
+    // ===== API 1: LYRICS.OVH =====
     private suspend fun tryLyricsOvh(artist: String, title: String): String? {
         return try {
             val encodedArtist = URLEncoder.encode(artist, "UTF-8")
             val encodedTitle = URLEncoder.encode(title, "UTF-8")
             val url = "https://api.lyrics.ovh/v1/$encodedArtist/$encodedTitle"
+
+            Log.d(TAG, "  → Lyrics.ovh: $url")
 
             val response = URL(url).readText()
             val json = JSONObject(response)
@@ -148,22 +198,23 @@ class LyricsService(private val context: Context) {
             json.optString("lyrics")
                 .takeIf { it.isNotBlank() && it != "null" }
                 ?.trim()
+                ?.also { Log.d(TAG, "  ✓ Lyrics.ovh: Trouvé (${it.length} caractères)") }
         } catch (e: Exception) {
-            Log.d("LyricsService", "Lyrics.ovh miss: ${e.message}")
+            Log.d(TAG, "  ✗ Lyrics.ovh: ${e.message}")
             null
         }
     }
 
-    // ===== API 2: CHARTLYRICS (Gratuite SOAP API) =====
+    // ===== API 2: CHARTLYRICS =====
     private suspend fun tryChartLyrics(artist: String, title: String): String? {
         return try {
             val encodedArtist = URLEncoder.encode(artist, "UTF-8")
             val encodedTitle = URLEncoder.encode(title, "UTF-8")
             val url = "http://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect?artist=$encodedArtist&song=$encodedTitle"
 
-            val response = URL(url).readText()
+            Log.d(TAG, "  → ChartLyrics: $url")
 
-            // Parser XML response
+            val response = URL(url).readText()
             val lyricsRegex = "<Lyric>(.*?)</Lyric>".toRegex(RegexOption.DOT_MATCHES_ALL)
             val match = lyricsRegex.find(response)
 
@@ -179,49 +230,21 @@ class LyricsService(private val context: Context) {
                             !it.contains("We do not have", ignoreCase = true) &&
                             !it.contains("Sorry, we don't have", ignoreCase = true)
                 }
+                ?.also { Log.d(TAG, "  ✓ ChartLyrics: Trouvé (${it.length} caractères)") }
         } catch (e: Exception) {
-            Log.d("LyricsService", "ChartLyrics miss: ${e.message}")
+            Log.d(TAG, "  ✗ ChartLyrics: ${e.message}")
             null
         }
     }
 
-    // ===== API 3: LYRIST (API Vercel gratuite) =====
+    // ===== API 3: LYRIST =====
     private suspend fun tryLyrist(artist: String, title: String): String? {
         return try {
             val encodedTitle = URLEncoder.encode(title, "UTF-8")
             val encodedArtist = URLEncoder.encode(artist, "UTF-8")
             val url = "https://lyrist.vercel.app/api/$encodedTitle/$encodedArtist"
 
-            val response = URL(url).readText()
-            val json = JSONObject(response)
-
-            json.optString("lyrics")
-                .takeIf { it.isNotBlank() && it != "null" }
-                ?.trim()
-        } catch (e: Exception) {
-            Log.d("LyricsService", "Lyrist miss: ${e.message}")
-            null
-        }
-    }
-
-    // ===== API 4: API ALTERNATIVE (format public) =====
-    private suspend fun tryApiSeeds(artist: String, title: String): String? {
-        return try {
-            // Alternative: essayer avec un format différent
-            val cleanArtist = artist.lowercase()
-                .replace(Regex("[^a-z0-9\\s]"), "")
-                .replace(Regex("\\s+"), " ")
-                .trim()
-
-            val cleanTitle = title.lowercase()
-                .replace(Regex("[^a-z0-9\\s]"), "")
-                .replace(Regex("\\s+"), " ")
-                .trim()
-
-            // Réessayer Lyrics.ovh avec un format nettoyé différemment
-            val encodedArtist = URLEncoder.encode(cleanArtist, "UTF-8")
-            val encodedTitle = URLEncoder.encode(cleanTitle, "UTF-8")
-            val url = "https://api.lyrics.ovh/v1/$encodedArtist/$encodedTitle"
+            Log.d(TAG, "  → Lyrist: $url")
 
             val response = URL(url).readText()
             val json = JSONObject(response)
@@ -229,13 +252,25 @@ class LyricsService(private val context: Context) {
             json.optString("lyrics")
                 .takeIf { it.isNotBlank() && it != "null" }
                 ?.trim()
+                ?.also { Log.d(TAG, "  ✓ Lyrist: Trouvé (${it.length} caractères)") }
         } catch (e: Exception) {
-            Log.d("LyricsService", "Alternative miss: ${e.message}")
+            Log.d(TAG, "  ✗ Lyrist: ${e.message}")
             null
         }
     }
 
-    // ===== RECHERCHE MANUELLE - SUGGESTIONS =====
+    // ===== RECHERCHE MANUELLE =====
+    suspend fun searchLyricsManual(query: String): List<SearchResult> = withContext(Dispatchers.IO) {
+        try {
+            val results = mutableListOf<SearchResult>()
+            searchInLyricsOvh(query)?.let { results.addAll(it) }
+            results.distinctBy { "${it.artist.lowercase()}-${it.title.lowercase()}" }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erreur recherche manuelle", e)
+            emptyList()
+        }
+    }
+
     private suspend fun searchInLyricsOvh(query: String): List<SearchResult>? {
         return try {
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
@@ -261,96 +296,16 @@ class LyricsService(private val context: Context) {
                 }
             }.take(10)
         } catch (e: Exception) {
-            Log.e("LyricsService", "Search error: ${e.message}")
+            Log.e(TAG, "Erreur recherche suggestions", e)
             null
         }
     }
 
-    // ===== VARIANTES AMÉLIORÉES (5 variations) =====
-    private fun getTitleVariants(title: String, artist: String): List<Pair<String, String>> {
-        val variants = mutableSetOf<Pair<String, String>>()
-
-        // VARIANTE 1: Sans parenthèses/crochets
-        val noBrackets = title
-            .replace(Regex("\\(.*?\\)"), "")
-            .replace(Regex("\\[.*?\\]"), "")
-            .replace(Regex("\\s+"), " ")
-            .trim()
-        if (noBrackets.isNotBlank() && noBrackets != title) {
-            variants += noBrackets to artist
-        }
-
-        // VARIANTE 2: Sans featuring/ft
-        val noFeat = title
-            .replace(Regex("(?i)\\s*[\\(\\[]?(?:feat\\.?|ft\\.?|featuring)\\s+.*?[\\)\\]]?"), "")
-            .replace(Regex("\\s+"), " ")
-            .trim()
-        if (noFeat.isNotBlank() && noFeat != title) {
-            variants += noFeat to artist
-        }
-
-        // VARIANTE 3: Premier artiste seul (collaborations)
-        val mainArtist = artist
-            .split(Regex("[,&]|(?i)feat|(?i)ft\\.?"))
-            .first()
-            .trim()
-        if (mainArtist.isNotBlank() && mainArtist != artist) {
-            variants += title to mainArtist
-            if (noBrackets.isNotBlank()) {
-                variants += noBrackets to mainArtist
-            }
-        }
-
-        // VARIANTE 4: Sans version/remix/edit
-        val noVersion = title
-            .replace(Regex("(?i)\\s*-?\\s*\\(?(?:version|remix|mix|edit|remaster|remastered|live|acoustic|radio).*?\\)?"), "")
-            .replace(Regex("\\s+"), " ")
-            .trim()
-        if (noVersion.isNotBlank() && noVersion != title) {
-            variants += noVersion to artist
-            if (mainArtist != artist) {
-                variants += noVersion to mainArtist
-            }
-        }
-
-        // VARIANTE 5: Première partie du titre (avant tiret ou parenthèse)
-        val firstPart = title
-            .split(Regex("[\\(\\[-]"))
-            .first()
-            .trim()
-        if (firstPart.isNotBlank() && firstPart != title && firstPart.length >= 3) {
-            variants += firstPart to artist
-            if (mainArtist != artist) {
-                variants += firstPart to mainArtist
-            }
-        }
-
-        return variants.toList()
-    }
-
-    // ===== NETTOYAGE OPTIMISÉ =====
-    private fun cleanSongTitle(title: String): String {
-        return title
-            // Supprimer les versions/remixes entre parenthèses
-            .replace(Regex("(?i)\\s*\\(.*?(?:remix|mix|version|edit|remaster|live|acoustic).*?\\)"), "")
-            // Supprimer les crochets
-            .replace(Regex("\\s*\\[.*?\\]"), "")
-            // Supprimer featuring
-            .replace(Regex("(?i)\\s*[\\(\\[]?(?:feat\\.?|ft\\.?)\\s+.*"), "")
-            // Normaliser les espaces
-            .replace(Regex("\\s+"), " ")
-            .trim()
-    }
-
-    private fun cleanArtistName(artist: String): String {
-        return artist
-            // Prendre le premier artiste
-            .split(Regex("[,&]|(?i)feat|(?i)ft\\.?"))[0]
-            // Garder seulement lettres, chiffres, espaces, apostrophes et tirets
-            .replace(Regex("[^a-zA-Z0-9\\s'\\-àâäéèêëïîôùûüÿæœç]"), "")
-            // Normaliser les espaces
-            .replace(Regex("\\s+"), " ")
-            .trim()
+    // ===== SAUVEGARDE MANUELLE =====
+    fun saveManualLyrics(title: String, artist: String, lyrics: String) {
+        val key = MANUAL_PREFIX + "${artist}_${title}".lowercase()
+        cachePrefs.edit().putString(key, lyrics).apply()
+        Log.d(TAG, "✓ Paroles manuelles sauvegardées: $title - $artist")
     }
 
     // ===== CACHE =====
@@ -368,7 +323,6 @@ class LyricsService(private val context: Context) {
         return if (System.currentTimeMillis() < expiry) {
             lyrics to source
         } else {
-            // Supprimer le cache expiré
             cachePrefs.edit().remove(key).apply()
             null
         }
@@ -385,7 +339,7 @@ class LyricsService(private val context: Context) {
     }
 }
 
-// ===== CLASSES DE RÉSULTATS =====
+// Classes de résultats (inchangées)
 sealed class LyricsResult {
     data class Success(val lyrics: String, val source: String) : LyricsResult()
     object NotFound : LyricsResult()
