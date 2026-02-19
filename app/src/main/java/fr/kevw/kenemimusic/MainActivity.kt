@@ -133,6 +133,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.collectAsState
 import android.util.Log
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.alpha
 
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
@@ -3704,6 +3707,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+// =====================================================================
+// REMPLACEZ la fonction AlbumDetailScreen dans MainActivity.kt
+// par ce code complet. ArtistSongRow étant déjà défini, on réutilise
+// un AlbumSongRow similaire.
+// =====================================================================
 
     @Composable
     fun AlbumDetailScreen(
@@ -3722,6 +3730,9 @@ class MainActivity : ComponentActivity() {
         val context = LocalContext.current
         val listState = rememberLazyListState()
 
+        val firstVisibleItemIndex by remember { derivedStateOf { listState.firstVisibleItemIndex } }
+        val isHeaderVisible = firstVisibleItemIndex == 0
+
         LaunchedEffect(album.id) {
             scope.launch {
                 albumCoverUrl = imageService.getAlbumCoverUrl(album.name, album.artist)
@@ -3729,128 +3740,402 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Auto-scroll to current song in album
+        // Auto-scroll to current song
         LaunchedEffect(currentSong?.id) {
             currentSong?.let { song ->
                 val songIndex = songs.indexOfFirst { it.id == song.id }
                 if (songIndex != -1) {
                     scope.launch {
-                        listState.animateScrollToItem(songIndex)
+                        listState.animateScrollToItem(songIndex + 2)
                     }
                 }
             }
         }
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(album.name) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, "Retour")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize()
             ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                // ── HERO avec pochette en CERCLE ─────────────────────────
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(380.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.surfaceVariant,
+                                        MaterialTheme.colorScheme.surface
+                                    )
+                                )
+                            )
                     ) {
-                        Card(
+                        // Fond flouté / ambiance derrière le cercle
+                        if (albumCoverUrl != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(albumCoverUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .alpha(0.15f),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+
+                        // Dégradé de bas vers surface (fondu)
+                        Box(
                             modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(8.dp)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0.0f to Color.Transparent,
+                                            0.6f to Color.Transparent,
+                                            1.0f to MaterialTheme.colorScheme.surface
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Dégradé haut pour bouton retour
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0.0f to Color.Black.copy(alpha = 0.25f),
+                                            0.2f to Color.Transparent
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Contenu centré : cercle + infos
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = 64.dp, bottom = 20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
+                            // ── POCHETTE EN CERCLE ──
                             Box(
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .size(180.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (albumCoverUrl != null) {
                                     AsyncImage(
-                                        model = ImageRequest.Builder(context).data(albumCoverUrl)
-                                            .crossfade(true).build(),
+                                        model = ImageRequest.Builder(context)
+                                            .data(albumCoverUrl)
+                                            .crossfade(true)
+                                            .build(),
                                         contentDescription = "Pochette de ${album.name}",
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
                                     )
                                 } else if (isLoading) {
                                     CircularProgressIndicator(
-                                        modifier = Modifier.size(32.dp), strokeWidth = 3.dp
+                                        modifier = Modifier.size(48.dp),
+                                        strokeWidth = 3.dp,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 } else {
                                     Icon(
                                         imageVector = Icons.Default.Album,
                                         contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
+                                        modifier = Modifier.size(80.dp),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.width(16.dp))
+                            Spacer(modifier = Modifier.height(20.dp))
 
-                        Column {
+                            // Nom de l'album
                             Text(
                                 text = album.name,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                letterSpacing = (-0.3).sp,
                                 maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 32.dp)
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = album.artist,
-                                fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${songs.size} chansons",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Artiste + nb de chansons
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = album.artist,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(4.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                )
+
+                                Text(
+                                    text = "${songs.size} chanson${if (songs.size > 1) "s" else ""}",
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
 
-                if (songs.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+                // ── BOUTONS LECTURE / ALÉATOIRE ──────────────────────────
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            "Aucune chanson dans cet album",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
-                        items(songs) { song ->
-                            SongItem(
-                                song = song,
-                                onClick = { onSongClick(song) },
-                                isPlaying = isPlaying,
-                                isCurrentSong = currentSong?.id == song.id
+                        Button(
+                            onClick = {
+                                if (songs.isNotEmpty()) {
+                                    musicPlayer.setPlaylist(songs)
+                                    musicPlayer.playSong(songs.first())
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
                             )
-                            HorizontalDivider()
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Lecture",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                if (songs.isNotEmpty()) {
+                                    musicPlayer.setPlaylist(songs)
+                                    musicPlayer.toggleShuffle()
+                                    musicPlayer.playSong(songs.random())
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.5.dp,
+                                MaterialTheme.colorScheme.outline
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shuffle,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Aléatoire",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp
+                            )
                         }
                     }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+                }
+
+                // ── LISTE DES CHANSONS ───────────────────────────────────
+                if (songs.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "Aucune chanson dans cet album",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    itemsIndexed(
+                        items = songs,
+                        key = { _, song -> song.id }
+                    ) { index, song ->
+                        AlbumSongRow(
+                            song = song,
+                            index = index + 1,
+                            isCurrentSong = currentSong?.id == song.id,
+                            isPlaying = isPlaying && currentSong?.id == song.id,
+                            onClick = { onSongClick(song) }
+                        )
+                        if (index < songs.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 72.dp, end = 20.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                            )
+                        }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(80.dp))
+                    }
+                }
+            }
+
+            // ── TOP BAR FLOTTANTE ────────────────────────────────────────
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(if (isHeaderVisible) 56.dp else 64.dp)
+                    .background(
+                        if (isHeaderVisible) Color.Transparent
+                        else MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    )
+            ) {
+                if (!isHeaderVisible) {
+                    Text(
+                        text = album.name,
+                        modifier = Modifier.align(Alignment.Center),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 4.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isHeaderVisible)
+                            Color.Black.copy(alpha = 0.35f)
+                        else
+                            Color.Transparent
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Retour",
+                            tint = if (isHeaderVisible) Color.White
+                            else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(6.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Ligne de chanson pour la page album ────────────────────────────
+    @Composable
+    private fun AlbumSongRow(
+        song: Song,
+        index: Int,
+        isCurrentSong: Boolean,
+        isPlaying: Boolean,
+        onClick: () -> Unit
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    if (isCurrentSong)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                    else Color.Transparent
+                )
+                .clickable(onClick = onClick)
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Numéro ou indicateur de lecture
+            Box(
+                modifier = Modifier.width(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isCurrentSong && isPlaying) {
+                    PlayingIndicator()
+                } else {
+                    Text(
+                        text = index.toString(),
+                        fontSize = 15.sp,
+                        fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isCurrentSong)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Titre
+            Text(
+                text = song.title,
+                fontSize = 15.sp,
+                fontWeight = if (isCurrentSong) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (isCurrentSong)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+
+            // Badge lecture
+            if (isCurrentSong) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = if (isPlaying) "▶" else "⏸",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    )
                 }
             }
         }
@@ -3873,6 +4158,10 @@ class MainActivity : ComponentActivity() {
         val context = LocalContext.current
         val listState = rememberLazyListState()
 
+        // Détecter si le header est visible pour l'effet de la TopBar
+        val firstVisibleItemIndex by remember { derivedStateOf { listState.firstVisibleItemIndex } }
+        val isHeaderVisible = firstVisibleItemIndex == 0
+
         LaunchedEffect(artist.name) {
             scope.launch {
                 artistImageUrl = imageService.getArtistImageUrl(artist.name)
@@ -3880,128 +4169,430 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Auto-scroll to current song in artist list
+        // Auto-scroll to current song
         LaunchedEffect(currentSong?.id) {
             currentSong?.let { song ->
                 val songIndex = songs.indexOfFirst { it.id == song.id }
                 if (songIndex != -1) {
                     scope.launch {
-                        listState.animateScrollToItem(songIndex)
+                        // +2 pour compter le header hero dans la LazyColumn
+                        listState.animateScrollToItem(songIndex + 2)
                     }
                 }
             }
         }
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(artist.name) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, "Retour")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize()
             ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                // ── HERO IMAGE avec dégradé ──────────────────────────────
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(360.dp)
                     ) {
-                        Card(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(40.dp)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                        ) {
-                            Box(
+                        // Image de fond
+                        if (artistImageUrl != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(artistImageUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Photo de ${artist.name}",
                                 modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else if (isLoading) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (artistImageUrl != null) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context).data(artistImageUrl)
-                                            .crossfade(true).build(),
-                                        contentDescription = "Photo de ${artist.name}",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else if (isLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(32.dp), strokeWidth = 3.dp
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(48.dp),
+                                    strokeWidth = 3.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        } else {
+                            // Fallback : dégradé avec initiale
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                                MaterialTheme.colorScheme.surface
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = artist.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                    fontSize = 96.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White.copy(alpha = 0.3f)
+                                )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(16.dp))
+                        // Dégradé du bas (noir vers transparent) — effet Apple Music
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0.0f to Color.Transparent,
+                                            0.45f to Color.Transparent,
+                                            1.0f to MaterialTheme.colorScheme.surface
+                                        )
+                                    )
+                                )
+                        )
 
-                        Column {
+                        // Dégradé du haut (pour la lisibilité du bouton retour)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0.0f to Color.Black.copy(alpha = 0.35f),
+                                            0.25f to Color.Transparent
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Nom + stats en bas de l'image
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp)
+                        ) {
                             Text(
                                 text = artist.name,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 34.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                letterSpacing = (-0.5).sp,
+                                lineHeight = 38.sp,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${artist.albumCount} albums",
-                                fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${songs.size} chansons",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // Badge Albums
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = Color.White.copy(alpha = 0.18f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Album,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = Color.White.copy(alpha = 0.85f)
+                                        )
+                                        Text(
+                                            text = "${artist.albumCount} album${if (artist.albumCount > 1) "s" else ""}",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White.copy(alpha = 0.85f)
+                                        )
+                                    }
+                                }
+
+                                // Badge Chansons
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = Color.White.copy(alpha = 0.18f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.MusicNote,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = Color.White.copy(alpha = 0.85f)
+                                        )
+                                        Text(
+                                            text = "${songs.size} chanson${if (songs.size > 1) "s" else ""}",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White.copy(alpha = 0.85f)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                if (songs.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+                // ── BOUTON "TOUT JOUER" ──────────────────────────────────
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            "Aucune chanson pour cet artiste",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(songs) { song ->
-                            SongItem(
-                                song = song,
-                                onClick = { onSongClick(song) },
-                                isPlaying = isPlaying,
-                                isCurrentSong = currentSong?.id == song.id
+                        // Bouton Lecture
+                        Button(
+                            onClick = {
+                                if (songs.isNotEmpty()) {
+                                    musicPlayer.setPlaylist(songs)
+                                    musicPlayer.playSong(songs.first())
+                                }
+                            },
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
                             )
-                            HorizontalDivider()
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Lecture",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
+                        }
+
+                        // Bouton Aléatoire
+                        OutlinedButton(
+                            onClick = {
+                                if (songs.isNotEmpty()) {
+                                    musicPlayer.setPlaylist(songs)
+                                    musicPlayer.toggleShuffle()
+                                    musicPlayer.playSong(songs.random())
+                                }
+                            },
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.5.dp,
+                                MaterialTheme.colorScheme.outline
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shuffle,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Aléatoire",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp
+                            )
                         }
                     }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+                }
+
+                // ── LISTE DES CHANSONS ───────────────────────────────────
+                if (songs.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .background(MaterialTheme.colorScheme.surface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "Aucune chanson pour cet artiste",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    itemsIndexed(
+                        items = songs,
+                        key = { _, song -> song.id }
+                    ) { index, song ->
+                        ArtistSongRow(
+                            song = song,
+                            index = index + 1,
+                            isCurrentSong = currentSong?.id == song.id,
+                            isPlaying = isPlaying && currentSong?.id == song.id,
+                            onClick = { onSongClick(song) }
+                        )
+                        if (index < songs.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 72.dp, end = 20.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                            )
+                        }
+                    }
+
+                    // Espace en bas
+                    item {
+                        Spacer(modifier = Modifier.height(80.dp))
+                    }
+                }
+            }
+
+            // ── TOP BAR FLOTTANTE ────────────────────────────────────────
+            // Transparente sur le hero, opaque en scrollant
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(if (isHeaderVisible) 56.dp else 64.dp)
+                    .background(
+                        if (isHeaderVisible) Color.Transparent
+                        else MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    )
+            ) {
+                // Titre centré (visible uniquement quand le hero est hors écran)
+                if (!isHeaderVisible) {
+                    Text(
+                        text = artist.name,
+                        modifier = Modifier.align(Alignment.Center),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Bouton retour toujours visible
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 4.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isHeaderVisible)
+                            Color.Black.copy(alpha = 0.35f)
+                        else
+                            Color.Transparent
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Retour",
+                            tint = if (isHeaderVisible) Color.White
+                            else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(6.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Ligne de chanson spécifique à la page artiste ──────────────────
+    @Composable
+    private fun ArtistSongRow(
+        song: Song,
+        index: Int,
+        isCurrentSong: Boolean,
+        isPlaying: Boolean,
+        onClick: () -> Unit
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    if (isCurrentSong)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                    else Color.Transparent
+                )
+                .clickable(onClick = onClick)
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Numéro de piste ou indicateur de lecture
+            Box(
+                modifier = Modifier.width(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isCurrentSong && isPlaying) {
+                    PlayingIndicator()
+                } else {
+                    Text(
+                        text = index.toString(),
+                        fontSize = 15.sp,
+                        fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isCurrentSong)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Titre + artiste
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = song.title,
+                    fontSize = 15.sp,
+                    fontWeight = if (isCurrentSong) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isCurrentSong)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (song.album.isNotBlank() && song.album != "Album inconnu") {
+                    Text(
+                        text = song.album,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Badge "En lecture"
+            if (isCurrentSong) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = if (isPlaying) "▶" else "⏸",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    )
                 }
             }
         }
