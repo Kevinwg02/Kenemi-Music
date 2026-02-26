@@ -91,7 +91,7 @@ class StatsManager(context: Context) {
 
         recentlyPlayed.remove(song.id)
         recentlyPlayed.add(0, song.id)
-        if (recentlyPlayed.size > 50) {
+        if (recentlyPlayed.size > 20) {
             recentlyPlayed.removeAt(recentlyPlayed.size - 1)
         }
 
@@ -101,7 +101,7 @@ class StatsManager(context: Context) {
         saveData()
     }
 
-    fun getTopSongs(songs: List<Song>, limit: Int = 20): List<PlayCount> {
+    fun getTopSongs(songs: List<Song>, limit: Int = 5): List<PlayCount> {
         return playCounts.values
             .sortedByDescending { it.count }
             .take(limit)
@@ -114,7 +114,7 @@ class StatsManager(context: Context) {
             .take(limit)
     }
 
-    fun getTopArtists(songs: List<Song>, limit: Int = 15): List<Pair<String, Int>> {
+    fun getTopArtists(songs: List<Song>, limit: Int = 5): List<Pair<String, Int>> {
         val artistCounts = mutableMapOf<String, Int>()
 
         playCounts.values.forEach { playCount ->

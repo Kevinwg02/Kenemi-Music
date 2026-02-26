@@ -540,7 +540,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Version by Kevinwg02", fontWeight = FontWeight.Medium)
                         Text(
-                            text = "26.02.19",
+                            text = "26.02.26",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

@@ -489,6 +489,7 @@ override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
             try {
                 startForeground(NOTIFICATION_ID, buildNotification())
                 Log.d("MusicService", "Started foreground service")
+                Log.d("MusicService", "Started foreground service")
             } catch (e: Exception) {
                 Log.e("MusicService", "Error starting foreground service", e)
             }

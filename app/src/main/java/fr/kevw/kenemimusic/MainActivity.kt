@@ -137,6 +137,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.alpha
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
 fun customColorScheme() = darkColorScheme(
@@ -535,6 +537,7 @@ class MainActivity : ComponentActivity() {
                 artistsDeferred.await()
                 foldersDeferred.await()
 
+                injectSecondaryArtists()
                 Log.d("MainActivity", "Data loaded: ${songs.size} songs")
 
                 // ✅ FIX: Try to restore after songs are loaded
@@ -546,7 +549,35 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    private fun injectSecondaryArtists() {
+        val existingNames = artists.map { it.name.lowercase() }.toHashSet()
+        val toAdd = mutableMapOf<String, Int>() // name → nb de chansons
 
+        songs.forEach { song ->
+            val allArtists = ArtistUtils.parseArtists(song.artist)
+
+            allArtists.forEach { name ->
+                val key = name.lowercase()
+                if (key !in existingNames) {
+                    // Artiste pas encore connu → l'ajouter comme virtuel
+                    toAdd[name] = (toAdd[name] ?: 0) + 1
+                }
+                // Si déjà connu → rien à faire, loadArtists() l'a déjà compté
+            }
+        }
+
+        toAdd.forEach { (name, count) ->
+            artists.add(Artist(id = -1L, name = name, albumCount = 0, songCount = count))
+            Log.d("MainActivity", "Artiste secondaire ajouté: $name ($count chansons)")
+        }
+
+        // Retrier après ajout
+        val sorted = artists.sortedBy { it.name }
+        artists.clear()
+        artists.addAll(sorted)
+
+        Log.d("MainActivity", "Artistes secondaires ajoutés: ${toAdd.size}")
+    }
     private fun loadSongs() {
         val songList = mutableListOf<Song>()
 
@@ -668,7 +699,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadArtists() {
-        val artistList = mutableListOf<Artist>()
+        val artistMap = mutableMapOf<String, Artist>() // clé = nom lowercase
 
         try {
             val collection = MediaStore.Audio.Artists.EXTERNAL_CONTENT_URI
@@ -680,10 +711,7 @@ class MainActivity : ComponentActivity() {
             )
 
             contentResolver.query(
-                collection,
-                projection,
-                null,
-                null,
+                collection, projection, null, null,
                 "${MediaStore.Audio.Artists.ARTIST} ASC"
             )?.use { cursor ->
                 val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists._ID)
@@ -693,23 +721,39 @@ class MainActivity : ComponentActivity() {
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idColumn)
-                    val artist = cursor.getString(artistColumn) ?: "Artiste inconnu"
+                    val artistField = cursor.getString(artistColumn) ?: "Artiste inconnu"
                     val albumCount = cursor.getInt(albumCountColumn)
                     val trackCount = cursor.getInt(trackCountColumn)
 
-                    artistList.add(Artist(id, artist, albumCount, trackCount))
+                    // Éclater les artistes composés ("A / B", "A feat. B", etc.)
+                    val parsedNames = ArtistUtils.parseArtists(artistField)
+
+                    parsedNames.forEachIndexed { index, name ->
+                        val key = name.lowercase()
+                        if (artistMap.containsKey(key)) {
+                            // L'artiste existe déjà, incrémenter le songCount
+                            val existing = artistMap[key]!!
+                            artistMap[key] = existing.copy(songCount = existing.songCount + trackCount)
+                        } else {
+                            // Premier artiste = id réel de MediaStore, les suivants = -1 (virtuels)
+                            artistMap[key] = Artist(
+                                id = if (index == 0) id else -1L,
+                                name = name,
+                                albumCount = if (index == 0) albumCount else 0,
+                                songCount = trackCount
+                            )
+                        }
+                    }
                 }
             }
 
             artists.clear()
-            artists.addAll(artistList)
+            artists.addAll(artistMap.values.sortedBy { it.name })
         } catch (e: Exception) {
             Log.e("MainActivity", "Error loading artists", e)
         }
     }
 
-
-    // ✅ FIXED: Only ONE loadFolders function
     private fun loadFolders() {
         val folderMap = mutableMapOf<String, MutableList<Song>>()
 
@@ -985,7 +1029,9 @@ class MainActivity : ComponentActivity() {
 
                     3 -> {
                         if (selectedArtist != null) {
-                            val artistSongs = songs.filter { it.artist == selectedArtist!!.name }
+                            val artistSongs = songs.filter { song ->
+                                ArtistUtils.songBelongsToArtist(song, selectedArtist!!.name)
+                            }
                             val imageService = ImageServiceSingleton.getArtistImageService()
                             BackHandler { selectedArtist = null }
                             ArtistDetailScreen(
@@ -2068,6 +2114,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
 
     @Composable
     fun TopArtistItem(artistName: String, playCount: Int) {
