@@ -937,36 +937,36 @@ class MainActivity : ComponentActivity() {
             containerColor = MaterialTheme.colorScheme.surface, bottomBar = {
                 NavigationBar(
                     containerColor = Color(0xFF000000).copy(alpha = 0.85f),
-                    modifier = Modifier.height(64.dp)
+                    modifier = Modifier.height(92.dp)
                 ) {
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.PlayArrow, "Lecteur", Modifier.size(26.dp)) },
+                        icon = { Icon(Icons.Default.PlayArrow, "Lecteur", Modifier.size(32.dp)) },
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 })
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.MusicNote, "Chansons", Modifier.size(26.dp)) },
+                        icon = { Icon(Icons.Default.MusicNote, "Chansons", Modifier.size(32.dp)) },
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 })
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Album, "Albums", Modifier.size(26.dp)) },
+                        icon = { Icon(Icons.Default.Album, "Albums", Modifier.size(32.dp)) },
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 })
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Person, "Artistes", Modifier.size(26.dp)) },
+                        icon = { Icon(Icons.Default.Person, "Artistes", Modifier.size(32.dp)) },
                         selected = selectedTab == 3,
                         onClick = { selectedTab = 3 })
                     NavigationBarItem(icon = {
-                        Icon(
-                            Icons.Default.QueueMusic, "Playlists", Modifier.size(26.dp)
+                    Icon(
+                            Icons.Default.QueueMusic, "Playlists", Modifier.size(32.dp)
                         )
                     }, selected = selectedTab == 4, onClick = { selectedTab = 4 })
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Folder, "Dossiers", Modifier.size(26.dp)) },
+                        icon = { Icon(Icons.Default.Folder, "Dossiers", Modifier.size(32.dp)) },
                         selected = selectedTab == 5,
                         onClick = { selectedTab = 5 }
                     )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Settings, "Paramètres", Modifier.size(26.dp)) },
+                        icon = { Icon(Icons.Default.Settings, "Paramètres", Modifier.size(32.dp)) },
                         selected = selectedTab == 6,
                         onClick = { selectedTab = 6 })
                 }
@@ -2730,246 +2730,203 @@ class MainActivity : ComponentActivity() {
                         .padding(padding)
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceEvenly
+                    verticalArrangement = Arrangement.Top
                 ) {
-                Card(
-                    modifier = Modifier
-                        .size(280.dp)
-                        .clip(RoundedCornerShape(36.dp)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
-                    ) {
-                        if (albumCoverUrl != null) {
-                            // Afficher la pochette de l'album
-                            AsyncImage(
-                                model = ImageRequest.Builder(context).data(albumCoverUrl)
-                                    .crossfade(true).build(),
-                                contentDescription = "Pochette de ${currentSong?.album}",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else if (isLoadingCover) {
-                            // Loader pendant le chargement
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(64.dp), strokeWidth = 4.dp
-                            )
-                        } else {
-                            // Icône par défaut
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = "Album cover",
-                                modifier = Modifier.size(120.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                Spacer(modifier = Modifier.height(32.dp))
-
-                Text(
-                    text = songTitle,
-                    fontSize = 38.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Text(
-                    text = artistName,
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable(
-                        enabled = currentSong != null && artistName != "Sélectionnez une chanson"
-                    ) {
-                        currentSong?.let {
-                            onNavigateToArtist?.invoke(it.artist)
-                        }
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
+                    Card(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .size(280.dp)
+                            .clip(RoundedCornerShape(36.dp)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                     ) {
-
-                        // --- BOUTON LISTE DE LECTURE (GAUCHE) ---
-                        FilledTonalIconButton(
-                            onClick = onShowQueue,
-                            modifier = Modifier.size(40.dp)
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.QueueMusic,
-                                contentDescription = "Liste de lecture"
-                            )
-                        }
-                        // ✅ BOUTON PAROLES (CENTRE)
-                        FilledTonalIconButton(
-                            onClick = onShowLyrics,
-                            modifier = Modifier.size(40.dp),
-                            enabled = currentSong != null
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = "Voir les paroles"
-                            )
-                        }
-                        // --- BOUTON FAVORI (DROITE) ---
-                        FilledTonalIconButton(
-                            onClick = {
-                                currentSong?.let { onToggleFavorite(it.id) }
-                            },
-                            modifier = Modifier.size(40.dp),
-                            enabled = currentSong != null,
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = if (isFavorite)
-                                    MaterialTheme.colorScheme.primaryContainer
-                                else
-                                    MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Icon(
-                                imageVector = if (isFavorite)
-                                    Icons.Default.Favorite
-                                else
-                                    Icons.Default.FavoriteBorder,
-                                contentDescription = if (isFavorite)
-                                    "Retirer des favoris"
-                                else
-                                    "Ajouter aux favoris",
-                                tint = if (isFavorite)
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            if (albumCoverUrl != null) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context).data(albumCoverUrl)
+                                        .crossfade(true).build(),
+                                    contentDescription = "Pochette de ${currentSong?.album}",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else if (isLoadingCover) {
+                                CircularProgressIndicator(modifier = Modifier.size(64.dp), strokeWidth = 4.dp)
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.MusicNote,
+                                    contentDescription = "Album cover",
+                                    modifier = Modifier.size(120.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
-                    Slider(
-                        value = progress, onValueChange = { newProgress ->
-                            val newPosition = ((newProgress / 100f) * duration).toLong()
-                            musicPlayer.seekTo(newPosition)
-                        }, valueRange = 0f..100f, modifier = Modifier.fillMaxWidth()
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        text = songTitle,
+                        fontSize = 38.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = artistName,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable(
+                            enabled = currentSong != null && artistName != "Sélectionnez une chanson"
+                        ) {
+                            currentSong?.let { onNavigateToArtist?.invoke(it.artist) }
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    // ← Ce Spacer doit être un enfant DIRECT de la Column principale
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Boutons queue / paroles / favori + slider
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FilledTonalIconButton(onClick = onShowQueue, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Default.QueueMusic, contentDescription = "Liste de lecture")
+                            }
+                            FilledTonalIconButton(
+                                onClick = onShowLyrics,
+                                modifier = Modifier.size(40.dp),
+                                enabled = currentSong != null
+                            ) {
+                                Icon(Icons.Default.MusicNote, contentDescription = "Voir les paroles")
+                            }
+                            FilledTonalIconButton(
+                                onClick = { currentSong?.let { onToggleFavorite(it.id) } },
+                                modifier = Modifier.size(40.dp),
+                                enabled = currentSong != null,
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = if (isFavorite) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = if (isFavorite) "Retirer des favoris" else "Ajouter aux favoris",
+                                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Slider(
+                            value = progress,
+                            onValueChange = { newProgress ->
+                                val newPosition = ((newProgress / 100f) * duration).toLong()
+                                musicPlayer.seekTo(newPosition)
+                            },
+                            valueRange = 0f..100f,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(text = formatDuration(currentPosition), fontSize = 12.sp)
+                            Text(text = formatDuration(duration), fontSize = 12.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Boutons Repeat / Play / Shuffle
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(text = formatDuration(currentPosition), fontSize = 12.sp)
-                        Text(text = formatDuration(duration), fontSize = 12.sp)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-
-                    // --- REPEAT (gauche) ---
-                    FilledTonalIconButton(
-                        onClick = { musicPlayer.toggleRepeatMode() },
-                        modifier = Modifier.size(48.dp),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = if (repeatMode != RepeatMode.OFF) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Icon(
-                            imageVector = when (repeatMode) {
-                                RepeatMode.OFF -> Icons.Default.Repeat
-                                RepeatMode.ONE -> Icons.Default.RepeatOne
-                                RepeatMode.ALL -> Icons.Default.Repeat
-                            },
-                            contentDescription = when (repeatMode) {
-                                RepeatMode.OFF -> "Répétition désactivée"
-                                RepeatMode.ONE -> "Répéter cette chanson"
-                                RepeatMode.ALL -> "Répéter toute la playlist"
-                            },
-                            tint = if (repeatMode != RepeatMode.OFF) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    // --- CONTROLS AU CENTRE ---
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
                         FilledTonalIconButton(
-                            onClick = { musicPlayer.playPrevious() },
-                            modifier = Modifier.size(64.dp),
-                            enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL
+                            onClick = { musicPlayer.toggleRepeatMode() },
+                            modifier = Modifier.size(48.dp),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = if (repeatMode != RepeatMode.OFF) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            )
                         ) {
                             Icon(
-                                Icons.Default.SkipPrevious,
-                                contentDescription = "Précédent",
-                                modifier = Modifier.size(32.dp)
+                                imageVector = when (repeatMode) {
+                                    RepeatMode.OFF -> Icons.Default.Repeat
+                                    RepeatMode.ONE -> Icons.Default.RepeatOne
+                                    RepeatMode.ALL -> Icons.Default.Repeat
+                                },
+                                contentDescription = "Répétition",
+                                tint = if (repeatMode != RepeatMode.OFF) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        FloatingActionButton(
-                            onClick = {
-                                if (isPlaying) musicPlayer.pause() else musicPlayer.resume()
-                            }, modifier = Modifier.size(72.dp)
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPlaying) "Pause" else "Play",
-                                modifier = Modifier.size(36.dp)
-                            )
+                            FilledTonalIconButton(
+                                onClick = { musicPlayer.playPrevious() },
+                                modifier = Modifier.size(64.dp),
+                                enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL
+                            ) {
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "Précédent", modifier = Modifier.size(32.dp))
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            FloatingActionButton(
+                                onClick = { if (isPlaying) musicPlayer.pause() else musicPlayer.resume() },
+                                modifier = Modifier.size(72.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = if (isPlaying) "Pause" else "Play",
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            FilledTonalIconButton(
+                                onClick = { musicPlayer.playNext() },
+                                modifier = Modifier.size(64.dp),
+                                enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL
+                            ) {
+                                Icon(Icons.Default.SkipNext, contentDescription = "Suivant", modifier = Modifier.size(32.dp))
+                            }
                         }
-
-                        Spacer(modifier = Modifier.width(16.dp))
 
                         FilledTonalIconButton(
-                            onClick = { musicPlayer.playNext() },
-                            modifier = Modifier.size(64.dp),
-                            enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL
+                            onClick = { musicPlayer.toggleShuffle() },
+                            modifier = Modifier.size(48.dp),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = if (isShuffleEnabled) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            )
                         ) {
                             Icon(
-                                Icons.Default.SkipNext,
-                                contentDescription = "Suivant",
-                                modifier = Modifier.size(32.dp)
+                                imageVector = Icons.Default.Shuffle,
+                                contentDescription = "Mode aléatoire",
+                                tint = if (isShuffleEnabled) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
 
-
-                    FilledTonalIconButton(
-                        onClick = { musicPlayer.toggleShuffle() },
-                        modifier = Modifier.size(48.dp),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = if (isShuffleEnabled) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Shuffle,
-                            contentDescription = if (isShuffleEnabled) "Mode aléatoire activé"
-                            else "Mode aléatoire désactivé",
-                            tint = if (isShuffleEnabled) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-
-            }
             }
         }
     }
