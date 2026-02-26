@@ -136,6 +136,7 @@ import android.util.Log
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -936,7 +937,7 @@ class MainActivity : ComponentActivity() {
             containerColor = MaterialTheme.colorScheme.surface, bottomBar = {
                 NavigationBar(
                     containerColor = Color(0xFF000000).copy(alpha = 0.85f),
-                    modifier = Modifier.height(40.dp)
+                    modifier = Modifier.height(64.dp)
                 ) {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.PlayArrow, "Lecteur", Modifier.size(26.dp)) },
@@ -2689,14 +2690,48 @@ class MainActivity : ComponentActivity() {
         } else 0f
 
         Scaffold { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceEvenly
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Background album art with reduced opacity
+//                if (albumCoverUrl != null) {
+//                    AsyncImage(
+//                        model = ImageRequest.Builder(context).data(albumCoverUrl)
+//                            .crossfade(true).build(),
+//                        contentDescription = null,
+//                        modifier = Modifier
+//                            .fillMaxSize()
+//                            .alpha(0.3f),
+//                        contentScale = ContentScale.Crop
+//                    )
+//                }
+
+                if (albumCoverUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(albumCoverUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .alpha(0.6f)
+                            .blur(radiusX = 20.dp, radiusY = 20.dp),
+                        contentScale = ContentScale.Crop
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.45f))
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceEvenly
+                ) {
                 Card(
                     modifier = Modifier
                         .size(280.dp)
@@ -2744,8 +2779,8 @@ class MainActivity : ComponentActivity() {
 
                 Text(
                     text = artistName,
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.primary,  // ✅ Changed to primary color
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.clickable(
                         enabled = currentSong != null && artistName != "Sélectionnez une chanson"
                     ) {
@@ -2934,6 +2969,7 @@ class MainActivity : ComponentActivity() {
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
+            }
             }
         }
     }
