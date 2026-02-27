@@ -937,38 +937,43 @@ class MainActivity : ComponentActivity() {
             containerColor = MaterialTheme.colorScheme.surface, bottomBar = {
                 NavigationBar(
                     containerColor = Color(0xFF000000).copy(alpha = 0.85f),
-                    modifier = Modifier.height(92.dp)
+//                    modifier = Modifier.height(92.dp)
                 ) {
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.PlayArrow, "Lecteur", Modifier.size(32.dp)) },
+                        icon = { Icon(Icons.Default.PlayArrow, "Lecteur", Modifier.size(24.dp)) },
                         selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 })
+                        onClick = { selectedTab = 0 }
+                    )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.MusicNote, "Chansons", Modifier.size(32.dp)) },
+                        icon = { Icon(Icons.Default.MusicNote, "Chansons", Modifier.size(24.dp)) },
                         selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 })
+                        onClick = { selectedTab = 1 }
+                    )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Album, "Albums", Modifier.size(32.dp)) },
+                        icon = { Icon(Icons.Default.Album, "Albums", Modifier.size(24.dp)) },
                         selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 })
+                        onClick = { selectedTab = 2 }
+                    )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Person, "Artistes", Modifier.size(32.dp)) },
+                        icon = { Icon(Icons.Default.Person, "Artistes", Modifier.size(24.dp)) },
                         selected = selectedTab == 3,
-                        onClick = { selectedTab = 3 })
-                    NavigationBarItem(icon = {
-                    Icon(
-                            Icons.Default.QueueMusic, "Playlists", Modifier.size(32.dp)
-                        )
-                    }, selected = selectedTab == 4, onClick = { selectedTab = 4 })
+                        onClick = { selectedTab = 3 }
+                    )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Folder, "Dossiers", Modifier.size(32.dp)) },
+                        icon = { Icon(Icons.Default.QueueMusic, "Playlists", Modifier.size(24.dp)) },
+                        selected = selectedTab == 4,
+                        onClick = { selectedTab = 4 }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Folder, "Dossiers", Modifier.size(24.dp)) },
                         selected = selectedTab == 5,
                         onClick = { selectedTab = 5 }
                     )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Settings, "Paramètres", Modifier.size(32.dp)) },
+                        icon = { Icon(Icons.Default.Settings, "Paramètres", Modifier.size(24.dp)) },
                         selected = selectedTab == 6,
-                        onClick = { selectedTab = 6 })
+                        onClick = { selectedTab = 6 }
+                    )
                 }
             }) { padding ->
             Box(modifier = Modifier.padding(padding)) {
