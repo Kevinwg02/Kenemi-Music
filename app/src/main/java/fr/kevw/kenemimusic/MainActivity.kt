@@ -137,7 +137,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
-
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 // ===== PERSONNALISATION DES COULEURS =====
@@ -327,6 +332,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         super.onCreate(savedInstanceState)
         Log.d("MainActivity", "onCreate started")
 
@@ -937,6 +943,7 @@ class MainActivity : ComponentActivity() {
             containerColor = MaterialTheme.colorScheme.surface, bottomBar = {
                 NavigationBar(
                     containerColor = Color(0xFF000000).copy(alpha = 0.85f),
+                    windowInsets = WindowInsets.navigationBars
 //                    modifier = Modifier.height(92.dp)
                 ) {
                     NavigationBarItem(
@@ -2694,8 +2701,10 @@ class MainActivity : ComponentActivity() {
             (currentPosition.toFloat() / duration.toFloat()) * 100f
         } else 0f
 
-        Scaffold { padding ->
-            Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold (contentWindowInsets = WindowInsets(0)
+        ){ padding ->
+            Box(modifier = Modifier.fillMaxSize()
+               ) {
                 // Background album art with reduced opacity
 //                if (albumCoverUrl != null) {
 //                    AsyncImage(
@@ -2732,7 +2741,6 @@ class MainActivity : ComponentActivity() {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(padding)
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Top
@@ -2807,29 +2815,40 @@ class MainActivity : ComponentActivity() {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            FilledTonalIconButton(onClick = onShowQueue, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Default.QueueMusic, contentDescription = "Liste de lecture")
+                            FilledTonalIconButton(
+                                onClick = onShowQueue,
+                                modifier = Modifier.size(40.dp),
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = Color(0xFF2A2A2A),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Icon(Icons.Default.QueueMusic, contentDescription = "Liste de lecture", tint = Color.White)
                             }
                             FilledTonalIconButton(
                                 onClick = onShowLyrics,
                                 modifier = Modifier.size(40.dp),
-                                enabled = currentSong != null
+                                enabled = currentSong != null,
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = Color(0xFF2A2A2A),
+                                    contentColor = Color.White
+                                )
                             ) {
-                                Icon(Icons.Default.MusicNote, contentDescription = "Voir les paroles")
+                                Icon(Icons.Default.MusicNote, contentDescription = "Voir les paroles", tint = Color.White)
                             }
                             FilledTonalIconButton(
                                 onClick = { currentSong?.let { onToggleFavorite(it.id) } },
                                 modifier = Modifier.size(40.dp),
                                 enabled = currentSong != null,
                                 colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = if (isFavorite) MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surfaceVariant
+                                    containerColor = if (isFavorite) Color(0xFF03A9F4) else Color(0xFF2A2A2A),
+                                    contentColor = Color.White
                                 )
                             ) {
                                 Icon(
                                     imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                     contentDescription = if (isFavorite) "Retirer des favoris" else "Ajouter aux favoris",
-                                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = Color.White
                                 )
                             }
                         }
@@ -2865,8 +2884,8 @@ class MainActivity : ComponentActivity() {
                             onClick = { musicPlayer.toggleRepeatMode() },
                             modifier = Modifier.size(48.dp),
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = if (repeatMode != RepeatMode.OFF) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceVariant
+                                containerColor = if (repeatMode != RepeatMode.OFF) Color(0xFF03A9F4) else Color(0xFF2A2A2A),
+                                contentColor = Color.White
                             )
                         ) {
                             Icon(
@@ -2876,8 +2895,7 @@ class MainActivity : ComponentActivity() {
                                     RepeatMode.ALL -> Icons.Default.Repeat
                                 },
                                 contentDescription = "Répétition",
-                                tint = if (repeatMode != RepeatMode.OFF) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = Color.White
                             )
                         }
 
@@ -2888,28 +2906,38 @@ class MainActivity : ComponentActivity() {
                             FilledTonalIconButton(
                                 onClick = { musicPlayer.playPrevious() },
                                 modifier = Modifier.size(64.dp),
-                                enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL
+                                enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL,
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = Color(0xFF2A2A2A),
+                                    contentColor = Color.White
+                                )
                             ) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Précédent", modifier = Modifier.size(32.dp))
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "Précédent", modifier = Modifier.size(32.dp), tint = Color.White)
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             FloatingActionButton(
                                 onClick = { if (isPlaying) musicPlayer.pause() else musicPlayer.resume() },
-                                modifier = Modifier.size(72.dp)
+                                modifier = Modifier.size(72.dp),
+                                containerColor = Color(0xFF03A9F4)
                             ) {
                                 Icon(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = if (isPlaying) "Pause" else "Play",
-                                    modifier = Modifier.size(36.dp)
+                                    modifier = Modifier.size(36.dp),
+                                    tint = Color.White
                                 )
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             FilledTonalIconButton(
                                 onClick = { musicPlayer.playNext() },
                                 modifier = Modifier.size(64.dp),
-                                enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL
+                                enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL,
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = Color(0xFF2A2A2A),
+                                    contentColor = Color.White
+                                )
                             ) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Suivant", modifier = Modifier.size(32.dp))
+                                Icon(Icons.Default.SkipNext, contentDescription = "Suivant", modifier = Modifier.size(32.dp), tint = Color.White)
                             }
                         }
 
@@ -2917,20 +2945,19 @@ class MainActivity : ComponentActivity() {
                             onClick = { musicPlayer.toggleShuffle() },
                             modifier = Modifier.size(48.dp),
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = if (isShuffleEnabled) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceVariant
+                                containerColor = if (isShuffleEnabled) Color(0xFF03A9F4) else Color(0xFF2A2A2A),
+                                contentColor = Color.White
                             )
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Shuffle,
                                 contentDescription = "Mode aléatoire",
-                                tint = if (isShuffleEnabled) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = Color.White
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
@@ -4412,20 +4439,22 @@ class MainActivity : ComponentActivity() {
                             },
                             modifier = Modifier.weight(1f).height(44.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
+                                containerColor = Color(0xFF03A9F4)
                             ),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = null,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(20.dp),
+                                tint = Color.White
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 "Lecture",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp
+                                fontSize = 15.sp,
+                                color = Color.White
                             )
                         }
 
@@ -4442,19 +4471,21 @@ class MainActivity : ComponentActivity() {
                             shape = RoundedCornerShape(12.dp),
                             border = androidx.compose.foundation.BorderStroke(
                                 1.5.dp,
-                                MaterialTheme.colorScheme.outline
+                                Color(0xFF03A9F4)
                             )
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Shuffle,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(18.dp),
+                                tint = Color(0xFF03A9F4)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 "Aléatoire",
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp
+                                fontSize = 15.sp,
+                                color = Color(0xFF03A9F4)
                             )
                         }
                     }
