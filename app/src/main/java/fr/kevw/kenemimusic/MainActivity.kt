@@ -145,6 +145,10 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.core.view.WindowCompat
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.layout.fillMaxHeight
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
 fun customColorScheme() = darkColorScheme(
@@ -2667,19 +2671,21 @@ class MainActivity : ComponentActivity() {
         val songTitle = currentSong?.title ?: "Aucune chanson"
         val artistName = currentSong?.artist ?: "Sélectionnez une chanson"
 
-
         var albumCoverUrl by remember { mutableStateOf<String?>(null) }
         var isLoadingCover by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
         val isFavorite = currentSong?.let { favorites.contains(it.id) } ?: false
+
+        // 🔑 Détecter l'orientation
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
         LaunchedEffect(currentSong?.albumId) {
             if (currentSong != null) {
                 isLoadingCover = true
                 scope.launch {
-                    albumCoverUrl = imageService.getAlbumCoverUrl(
-                        currentSong.album, currentSong.artist
-                    )
+                    albumCoverUrl = imageService.getAlbumCoverUrl(currentSong.album, currentSong.artist)
                     isLoadingCover = false
                 }
             } else {
@@ -2687,277 +2693,290 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // OPTIMIZED: Update position less frequently and only when needed
         LaunchedEffect(isPlaying) {
             while (isPlaying) {
                 musicPlayer.updatePosition()
-                delay(1000) // Further reduced to 1s for better performance
+                delay(1000)
             }
         }
 
         val currentPosition = musicPlayer.currentPosition
         val duration = musicPlayer.duration
-        val progress = if (duration > 0) {
-            (currentPosition.toFloat() / duration.toFloat()) * 100f
-        } else 0f
+        val progress = if (duration > 0) (currentPosition.toFloat() / duration.toFloat()) * 100f else 0f
 
-        Scaffold (contentWindowInsets = WindowInsets(0)
-        ){ padding ->
-            Box(modifier = Modifier.fillMaxSize()
-               ) {
-                // Background album art with reduced opacity
-//                if (albumCoverUrl != null) {
-//                    AsyncImage(
-//                        model = ImageRequest.Builder(context).data(albumCoverUrl)
-//                            .crossfade(true).build(),
-//                        contentDescription = null,
-//                        modifier = Modifier
-//                            .fillMaxSize()
-//                            .alpha(0.3f),
-//                        contentScale = ContentScale.Crop
-//                    )
-//                }
-
+        Scaffold(contentWindowInsets = WindowInsets(0)) { padding ->
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Background flouté
                 if (albumCoverUrl != null) {
                     AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(albumCoverUrl)
-                            .crossfade(true)
-                            .build(),
+                        model = ImageRequest.Builder(context).data(albumCoverUrl).crossfade(true).build(),
                         contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .alpha(0.6f)
-                            .blur(radiusX = 20.dp, radiusY = 20.dp),
+                        modifier = Modifier.fillMaxSize().alpha(0.6f).blur(radiusX = 20.dp, radiusY = 20.dp),
                         contentScale = ContentScale.Crop
                     )
+                    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
+                }
 
-                    Box(
+                if (isLandscape) {
+                    // ── MODE PAYSAGE : pochette gauche | contrôles droite ──
+                    Row(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.45f))
-                    )
-                }
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Top
-                ) {
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Card(
-                        modifier = Modifier
-                            .size(280.dp)
-                            .clip(RoundedCornerShape(36.dp)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (albumCoverUrl != null) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context).data(albumCoverUrl)
-                                        .crossfade(true).build(),
-                                    contentDescription = "Pochette de ${currentSong?.album}",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else if (isLoadingCover) {
-                                CircularProgressIndicator(modifier = Modifier.size(64.dp), strokeWidth = 4.dp)
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.MusicNote,
-                                    contentDescription = "Album cover",
-                                    modifier = Modifier.size(120.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Text(
-                        text = songTitle,
-                        fontSize = 38.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Text(
-                        text = artistName,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable(
-                            enabled = currentSong != null && artistName != "Sélectionnez une chanson"
-                        ) {
-                            currentSong?.let { onNavigateToArtist?.invoke(it.artist) }
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    // ← Ce Spacer doit être un enfant DIRECT de la Column principale
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    // Boutons queue / paroles / favori + slider
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            FilledTonalIconButton(
-                                onClick = onShowQueue,
-                                modifier = Modifier.size(40.dp),
-                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = Color(0xFF2A2A2A),
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Icon(Icons.Default.QueueMusic, contentDescription = "Liste de lecture", tint = Color.White)
-                            }
-                            FilledTonalIconButton(
-                                onClick = onShowLyrics,
-                                modifier = Modifier.size(40.dp),
-                                enabled = currentSong != null,
-                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = Color(0xFF2A2A2A),
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Icon(Icons.Default.MusicNote, contentDescription = "Voir les paroles", tint = Color.White)
-                            }
-                            FilledTonalIconButton(
-                                onClick = { currentSong?.let { onToggleFavorite(it.id) } },
-                                modifier = Modifier.size(40.dp),
-                                enabled = currentSong != null,
-                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = if (isFavorite) Color(0xFF03A9F4) else Color(0xFF2A2A2A),
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                    contentDescription = if (isFavorite) "Retirer des favoris" else "Ajouter aux favoris",
-                                    tint = Color.White
-                                )
-                            }
-                        }
-
-                        Slider(
-                            value = progress,
-                            onValueChange = { newProgress ->
-                                val newPosition = ((newProgress / 100f) * duration).toLong()
-                                musicPlayer.seekTo(newPosition)
-                            },
-                            valueRange = 0f..100f,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(text = formatDuration(currentPosition), fontSize = 12.sp)
-                            Text(text = formatDuration(duration), fontSize = 12.sp)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Boutons Repeat / Play / Shuffle
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                            .padding(horizontal = 24.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        FilledTonalIconButton(
-                            onClick = { musicPlayer.toggleRepeatMode() },
-                            modifier = Modifier.size(48.dp),
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = if (repeatMode != RepeatMode.OFF) Color(0xFF03A9F4) else Color(0xFF2A2A2A),
-                                contentColor = Color.White
-                            )
+                        // Pochette à gauche
+                        Card(
+                            modifier = Modifier
+                                .size(200.dp)
+                                .clip(RoundedCornerShape(28.dp)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                         ) {
-                            Icon(
-                                imageVector = when (repeatMode) {
-                                    RepeatMode.OFF -> Icons.Default.Repeat
-                                    RepeatMode.ONE -> Icons.Default.RepeatOne
-                                    RepeatMode.ALL -> Icons.Default.Repeat
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                if (albumCoverUrl != null) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context).data(albumCoverUrl).crossfade(true).build(),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else if (isLoadingCover) {
+                                    CircularProgressIndicator(modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
+                                } else {
+                                    Icon(Icons.Default.MusicNote, null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(28.dp))
+
+                        // Contrôles à droite
+                        Column(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = songTitle,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = artistName,
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.clickable(enabled = currentSong != null && artistName != "Sélectionnez une chanson") {
+                                    currentSong?.let { onNavigateToArtist?.invoke(it.artist) }
                                 },
-                                contentDescription = "Répétition",
-                                tint = Color.White
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        }
 
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            FilledTonalIconButton(
-                                onClick = { musicPlayer.playPrevious() },
-                                modifier = Modifier.size(64.dp),
-                                enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL,
-                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = Color(0xFF2A2A2A),
-                                    contentColor = Color.White
-                                )
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Boutons queue / paroles / favori
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Précédent", modifier = Modifier.size(32.dp), tint = Color.White)
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            FloatingActionButton(
-                                onClick = { if (isPlaying) musicPlayer.pause() else musicPlayer.resume() },
-                                modifier = Modifier.size(72.dp),
-                                containerColor = Color(0xFF03A9F4)
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = if (isPlaying) "Pause" else "Play",
+                                FilledTonalIconButton(
+                                    onClick = onShowQueue,
                                     modifier = Modifier.size(36.dp),
-                                    tint = Color.White
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            FilledTonalIconButton(
-                                onClick = { musicPlayer.playNext() },
-                                modifier = Modifier.size(64.dp),
-                                enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL,
-                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = Color(0xFF2A2A2A),
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Suivant", modifier = Modifier.size(32.dp), tint = Color.White)
-                            }
-                        }
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color(0xFF2A2A2A), contentColor = Color.White)
+                                ) { Icon(Icons.Default.QueueMusic, null, tint = Color.White) }
 
-                        FilledTonalIconButton(
-                            onClick = { musicPlayer.toggleShuffle() },
-                            modifier = Modifier.size(48.dp),
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = if (isShuffleEnabled) Color(0xFF03A9F4) else Color(0xFF2A2A2A),
-                                contentColor = Color.White
+                                FilledTonalIconButton(
+                                    onClick = onShowLyrics,
+                                    modifier = Modifier.size(36.dp),
+                                    enabled = currentSong != null,
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color(0xFF2A2A2A), contentColor = Color.White)
+                                ) { Icon(Icons.Default.MusicNote, null, tint = Color.White) }
+
+                                FilledTonalIconButton(
+                                    onClick = { currentSong?.let { onToggleFavorite(it.id) } },
+                                    modifier = Modifier.size(36.dp),
+                                    enabled = currentSong != null,
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = if (isFavorite) Color(0xFF03A9F4) else Color(0xFF2A2A2A),
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Icon(
+                                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                        contentDescription = null,
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Slider
+                            Slider(
+                                value = progress,
+                                onValueChange = { musicPlayer.seekTo(((it / 100f) * duration).toLong()) },
+                                valueRange = 0f..100f,
+                                modifier = Modifier.fillMaxWidth()
                             )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shuffle,
-                                contentDescription = "Mode aléatoire",
-                                tint = Color.White
-                            )
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(text = formatDuration(currentPosition), fontSize = 11.sp)
+                                Text(text = formatDuration(duration), fontSize = 11.sp)
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Boutons Repeat / Prev / Play / Next / Shuffle
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                FilledTonalIconButton(
+                                    onClick = { musicPlayer.toggleRepeatMode() },
+                                    modifier = Modifier.size(40.dp),
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = if (repeatMode != RepeatMode.OFF) Color(0xFF03A9F4) else Color(0xFF2A2A2A)
+                                    )
+                                ) {
+                                    Icon(
+                                        imageVector = when (repeatMode) {
+                                            RepeatMode.OFF -> Icons.Default.Repeat
+                                            RepeatMode.ONE -> Icons.Default.RepeatOne
+                                            RepeatMode.ALL -> Icons.Default.Repeat
+                                        },
+                                        contentDescription = null, tint = Color.White
+                                    )
+                                }
+
+                                FilledTonalIconButton(
+                                    onClick = { musicPlayer.playPrevious() },
+                                    modifier = Modifier.size(52.dp),
+                                    enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL,
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color(0xFF2A2A2A))
+                                ) { Icon(Icons.Default.SkipPrevious, null, modifier = Modifier.size(28.dp), tint = Color.White) }
+
+                                FloatingActionButton(
+                                    onClick = { if (isPlaying) musicPlayer.pause() else musicPlayer.resume() },
+                                    modifier = Modifier.size(60.dp),
+                                    containerColor = Color(0xFF03A9F4)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(30.dp),
+                                        tint = Color.White
+                                    )
+                                }
+
+                                FilledTonalIconButton(
+                                    onClick = { musicPlayer.playNext() },
+                                    modifier = Modifier.size(52.dp),
+                                    enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL,
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color(0xFF2A2A2A))
+                                ) { Icon(Icons.Default.SkipNext, null, modifier = Modifier.size(28.dp), tint = Color.White) }
+
+                                FilledTonalIconButton(
+                                    onClick = { musicPlayer.toggleShuffle() },
+                                    modifier = Modifier.size(40.dp),
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = if (isShuffleEnabled) Color(0xFF03A9F4) else Color(0xFF2A2A2A)
+                                    )
+                                ) { Icon(Icons.Default.Shuffle, null, tint = Color.White) }
+                            }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                } else {
+                    // ── MODE PORTRAIT : layout existant inchangé ──
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Top
+                    ) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Card(
+                            modifier = Modifier.size(280.dp).clip(RoundedCornerShape(36.dp)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                if (albumCoverUrl != null) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context).data(albumCoverUrl).crossfade(true).build(),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else if (isLoadingCover) {
+                                    CircularProgressIndicator(modifier = Modifier.size(64.dp), strokeWidth = 4.dp)
+                                } else {
+                                    Icon(Icons.Default.MusicNote, null, modifier = Modifier.size(120.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Text(text = songTitle, fontSize = 38.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = artistName, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable(enabled = currentSong != null && artistName != "Sélectionnez une chanson") {
+                                currentSong?.let { onNavigateToArtist?.invoke(it.artist) }
+                            },
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                FilledTonalIconButton(onClick = onShowQueue, modifier = Modifier.size(40.dp), colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color(0xFF2A2A2A), contentColor = Color.White)) {
+                                    Icon(Icons.Default.QueueMusic, null, tint = Color.White)
+                                }
+                                FilledTonalIconButton(onClick = onShowLyrics, modifier = Modifier.size(40.dp), enabled = currentSong != null, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color(0xFF2A2A2A), contentColor = Color.White)) {
+                                    Icon(Icons.Default.MusicNote, null, tint = Color.White)
+                                }
+                                FilledTonalIconButton(
+                                    onClick = { currentSong?.let { onToggleFavorite(it.id) } },
+                                    modifier = Modifier.size(40.dp), enabled = currentSong != null,
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = if (isFavorite) Color(0xFF03A9F4) else Color(0xFF2A2A2A), contentColor = Color.White)
+                                ) { Icon(imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = null, tint = Color.White) }
+                            }
+                            Slider(value = progress, onValueChange = { musicPlayer.seekTo(((it / 100f) * duration).toLong()) }, valueRange = 0f..100f, modifier = Modifier.fillMaxWidth())
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(text = formatDuration(currentPosition), fontSize = 12.sp)
+                                Text(text = formatDuration(duration), fontSize = 12.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            FilledTonalIconButton(onClick = { musicPlayer.toggleRepeatMode() }, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = if (repeatMode != RepeatMode.OFF) Color(0xFF03A9F4) else Color(0xFF2A2A2A), contentColor = Color.White)) {
+                                Icon(imageVector = when (repeatMode) { RepeatMode.OFF -> Icons.Default.Repeat; RepeatMode.ONE -> Icons.Default.RepeatOne; RepeatMode.ALL -> Icons.Default.Repeat }, contentDescription = null, tint = Color.White)
+                            }
+                            Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                                FilledTonalIconButton(onClick = { musicPlayer.playPrevious() }, modifier = Modifier.size(64.dp), enabled = musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color(0xFF2A2A2A), contentColor = Color.White)) {
+                                    Icon(Icons.Default.SkipPrevious, null, modifier = Modifier.size(32.dp), tint = Color.White)
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                FloatingActionButton(onClick = { if (isPlaying) musicPlayer.pause() else musicPlayer.resume() }, modifier = Modifier.size(72.dp), containerColor = Color(0xFF03A9F4)) {
+                                    Icon(imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(36.dp), tint = Color.White)
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                FilledTonalIconButton(onClick = { musicPlayer.playNext() }, modifier = Modifier.size(64.dp), enabled = musicPlayer.hasNext || repeatMode == RepeatMode.ALL, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color(0xFF2A2A2A), contentColor = Color.White)) {
+                                    Icon(Icons.Default.SkipNext, null, modifier = Modifier.size(32.dp), tint = Color.White)
+                                }
+                            }
+                            FilledTonalIconButton(onClick = { musicPlayer.toggleShuffle() }, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = if (isShuffleEnabled) Color(0xFF03A9F4) else Color(0xFF2A2A2A), contentColor = Color.White)) {
+                                Icon(Icons.Default.Shuffle, null, tint = Color.White)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
             }
         }

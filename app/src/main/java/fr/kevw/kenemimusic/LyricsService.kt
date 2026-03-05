@@ -171,9 +171,7 @@ class LyricsService(private val context: Context) {
         }
 
         // SOURCE 2: ChartLyrics
-        tryChartLyrics(artist, title)?.let {
-            return it to "ChartLyrics"
-        }
+        tryLrcLib(artist, title)?.let { return it to "LrcLib" }
 
         // SOURCE 3: Lyrist
         tryLyrist(artist, title)?.let {
@@ -206,46 +204,35 @@ class LyricsService(private val context: Context) {
     }
 
     // ===== API 2: CHARTLYRICS =====
-    private suspend fun tryChartLyrics(artist: String, title: String): String? {
+    private suspend fun tryLrcLib(artist: String, title: String): String? {
         return try {
             val encodedArtist = URLEncoder.encode(artist, "UTF-8")
             val encodedTitle = URLEncoder.encode(title, "UTF-8")
-            val url = "http://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect?artist=$encodedArtist&song=$encodedTitle"
+            val url = "https://lrclib.net/api/get?artist_name=$encodedArtist&track_name=$encodedTitle"
 
-            Log.d(TAG, "  → ChartLyrics: $url")
-
+            Log.d(TAG, "  → LrcLib: $url")
             val response = URL(url).readText()
-            val lyricsRegex = "<Lyric>(.*?)</Lyric>".toRegex(RegexOption.DOT_MATCHES_ALL)
-            val match = lyricsRegex.find(response)
+            val json = JSONObject(response)
 
-            match?.groupValues?.get(1)
-                ?.replace("&lt;", "<")
-                ?.replace("&gt;", ">")
-                ?.replace("&amp;", "&")
-                ?.replace("&quot;", "\"")
-                ?.replace("&apos;", "'")
+            // LrcLib retourne "plainLyrics" (sans timestamps) ou "syncedLyrics" (avec)
+            (json.optString("plainLyrics").takeIf { it.isNotBlank() && it != "null" }
+                ?: json.optString("syncedLyrics").takeIf { it.isNotBlank() && it != "null" })
                 ?.trim()
-                ?.takeIf {
-                    it.isNotBlank() &&
-                            !it.contains("We do not have", ignoreCase = true) &&
-                            !it.contains("Sorry, we don't have", ignoreCase = true)
-                }
-                ?.also { Log.d(TAG, "  ✓ ChartLyrics: Trouvé (${it.length} caractères)") }
+                ?.also { Log.d(TAG, "  ✓ LrcLib: Trouvé (${it.length} caractères)") }
         } catch (e: Exception) {
-            Log.d(TAG, "  ✗ ChartLyrics: ${e.message}")
+            Log.d(TAG, "  ✗ LrcLib: ${e.message}")
             null
         }
     }
-
     // ===== API 3: LYRIST =====
     private suspend fun tryLyrist(artist: String, title: String): String? {
         return try {
-            val encodedTitle = URLEncoder.encode(title, "UTF-8")
             val encodedArtist = URLEncoder.encode(artist, "UTF-8")
-            val url = "https://lyrist.vercel.app/api/$encodedTitle/$encodedArtist"
+            val encodedTitle = URLEncoder.encode(title, "UTF-8")
+            // ✅ Bon ordre : artiste/titre
+            val url = "https://lyrist.vercel.app/api/$encodedArtist/$encodedTitle"
 
             Log.d(TAG, "  → Lyrist: $url")
-
             val response = URL(url).readText()
             val json = JSONObject(response)
 
