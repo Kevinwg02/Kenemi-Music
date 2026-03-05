@@ -30,7 +30,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
+import kotlinx.coroutines.async
 sealed interface LyricsUiState {
     object Loading : LyricsUiState
     data class Success(val lyrics: String, val source: String) : LyricsUiState
@@ -358,14 +358,22 @@ private fun SuccessState(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var artistImageUrl by remember { mutableStateOf<String?>(null) }
-    var isLoadingImage by remember { mutableStateOf(true) }
+
+    // 🔑 Parse tous les artistes de la chanson
+    val artistNames = remember(song.artist) {
+        ArtistUtils.parseArtists(song.artist).take(2) // Max 2 pour l'affichage
+    }
+
+    // Image pour chaque artiste
+    var artistImageUrls by remember { mutableStateOf<List<String?>>(listOf(null, null)) }
+    var isLoadingImages by remember { mutableStateOf(true) }
 
     LaunchedEffect(song.artist) {
-        scope.launch {
-            artistImageUrl = imageService.getArtistImageUrl(song.artist)
-            isLoadingImage = false
-        }
+        val urls = artistNames.map { name ->
+            scope.async { imageService.getArtistImageUrl(name) }
+        }.map { it.await() }
+        artistImageUrls = urls
+        isLoadingImages = false
     }
 
     Column(
@@ -387,38 +395,128 @@ private fun SuccessState(
                 modifier = Modifier.padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Card(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape),
-                    elevation = CardDefaults.cardElevation(2.dp)
-                ) {
+                // 🔑 Affichage combiné des artistes
+                if (artistNames.size >= 2) {
+                    // Deux artistes : images superposées
                     Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                        modifier = Modifier
+                            .width(88.dp)
+                            .height(72.dp)
                     ) {
-                        if (artistImageUrl != null) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(artistImageUrl)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = null,
+                        // Image artiste 2 (derrière, décalée à droite)
+                        Card(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .align(Alignment.CenterEnd)
+                                .clip(CircleShape),
+                            elevation = CardDefaults.cardElevation(1.dp)
+                        ) {
+                            Box(
                                 modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else if (isLoadingImage) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(40.dp)
-                            )
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val url2 = artistImageUrls.getOrNull(1)
+                                if (url2 != null) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(url2)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = artistNames.getOrNull(1),
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else if (isLoadingImages) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Image artiste 1 (devant, décalée à gauche)
+                        Card(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .align(Alignment.CenterStart)
+                                .clip(CircleShape),
+                            elevation = CardDefaults.cardElevation(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val url1 = artistImageUrls.getOrNull(0)
+                                if (url1 != null) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(url1)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = artistNames.getOrNull(0),
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else if (isLoadingImages) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Un seul artiste : image normale (code original)
+                    Card(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val url = artistImageUrls.getOrNull(0)
+                            if (url != null) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(url)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else if (isLoadingImages) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -479,9 +577,7 @@ private fun SuccessState(
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-
             Spacer(Modifier.width(8.dp))
-
             Text(
                 "Source: $source",
                 style = MaterialTheme.typography.bodySmall,
