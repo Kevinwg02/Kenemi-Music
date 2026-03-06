@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">KenemiMusic</string>
+    <string name="app_name">Kenemi Music</string>
+    <string name="widget_large_description">Kenemi Music - Lecteur avec liste</string>
+    <string name="widget_small_description">Kenemi Music - Lecteur compact</string>
 </resources>

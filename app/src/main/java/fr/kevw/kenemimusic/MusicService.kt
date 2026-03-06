@@ -39,14 +39,27 @@ class MusicService : Service() {
                 ((currentPosition.toFloat() / duration.toFloat()) * 100).toInt()
             } else 0
 
-            MusicWidgetProvider.updateWidget(this, currentSong, isPlaying, progress)
-            Log.d("MusicService", "Widget updated: ${currentSong?.title}, playing=$isPlaying, progress=$progress")
+            MusicWidgetProvider.updateWidget(
+                context = this,
+                song = currentSong,
+                isPlaying = isPlaying,
+                progress = progress,
+                albumArtUrl = currentAlbumArtUrl
+            )
+            MusicWidgetSmallProvider.updateWidget(
+                    context = this,
+            song = currentSong,
+            isPlaying = isPlaying,
+            progress = progress,
+            albumArtUrl = currentAlbumArtUrl
+            )
         } catch (e: Exception) {
             Log.e("MusicService", "Error updating widget", e)
         }
     }
     private var mediaPlayer: MediaPlayer? = null
     var currentSong: Song? = null
+    var currentAlbumArtUrl: String? = null
     var isPlaying by mutableStateOf(false)
     var currentPosition by mutableStateOf(0L)
     var duration by mutableStateOf(0L)
@@ -469,7 +482,7 @@ override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
             currentSong = song
             duration = mediaPlayer?.duration?.toLong() ?: 0L
             isPlaying = true
-
+            currentAlbumArtUrl = "content://media/external/audio/albumart/${song.albumId}"
             updatePlaybackState()
             startForeground(NOTIFICATION_ID, buildNotification())
             onStateChanged?.invoke()
