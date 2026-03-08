@@ -1106,6 +1106,7 @@ class MainActivity : ComponentActivity() {
                                 hasPermission = hasPermission,
                                 favorites = favorites,
                                 playlistManager = playlistManager,
+                                musicPlayer= musicPlayer,
                                 statsManager = statsManager,
                                 onRequestPermission = onRequestPermission,
                                 onPlaylistClick = { selectedPlaylist = it },
@@ -1526,6 +1527,7 @@ class MainActivity : ComponentActivity() {
         favorites: List<Long>,
         playlistManager: PlaylistManager,
         statsManager: StatsManager,
+        musicPlayer: MusicService,
         onRequestPermission: () -> Unit,
         onPlaylistClick: (Playlist) -> Unit,
         onCreatePlaylist: (String, List<Long>) -> Unit,
@@ -1655,7 +1657,7 @@ class MainActivity : ComponentActivity() {
                                     .padding(padding)
                             ) {
                                 item {
-                                    // En-tête avec le nombre de favoris
+                                    // En-tête avec boutons de lecture
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -1669,7 +1671,7 @@ class MainActivity : ComponentActivity() {
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                         Spacer(modifier = Modifier.width(16.dp))
-                                        Column {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 "Mes favoris",
                                                 fontSize = 20.sp,
@@ -1682,21 +1684,64 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     }
+
+                                    // ✅ BOUTONS LECTURE / ALÉATOIRE
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        // capture du scope
+                                        Button(
+                                            onClick = {
+                                                musicPlayer.setPlaylist(favoriteSongs)
+                                                musicPlayer.playSong(favoriteSongs.first())
+                                            },
+                                            modifier = Modifier.weight(1f).height(44.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primary
+                                            ),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(20.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Lecture", fontWeight = FontWeight.Bold)
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = {
+                                                musicPlayer.setPlaylist(favoriteSongs)
+                                                if (!musicPlayer.isShuffleEnabled) musicPlayer.toggleShuffle()
+                                                musicPlayer.playSong(favoriteSongs.random())
+                                            },
+                                            modifier = Modifier.weight(1f).height(44.dp),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Icon(Icons.Default.Shuffle, null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Aléatoire", fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+
                                     HorizontalDivider()
                                 }
 
                                 items(favoriteSongs) { song ->
-                                    FavoriteSongItem(song = song, onSongClick = { song ->
-                                        // Jouer directement la chanson
-                                    }, onRemoveFavorite = {
-                                        onToggleFavorite(song.id)
-                                    })
+                                    FavoriteSongItem(
+                                        song = song,
+                                        onSongClick = { clickedSong ->
+                                            // ✅ LECTURE ICI
+                                            musicPlayer.setPlaylist(favoriteSongs)
+                                            musicPlayer.playSong(clickedSong)
+                                        },
+                                        onRemoveFavorite = { onToggleFavorite(song.id) }
+                                    )
                                     HorizontalDivider()
                                 }
                             }
                         }
                     }
-
                     1 -> {
                         // ONGLET PLAYLISTS (code existant)
                         if (playlists.isEmpty()) {
