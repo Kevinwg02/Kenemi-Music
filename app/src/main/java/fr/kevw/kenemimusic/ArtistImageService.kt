@@ -152,7 +152,10 @@ class ArtistImageService(private val context: Context) {
                     return@withContext coverUrl
                 }
             }
-
+            if (cleanArtistName.isNotBlank()) {
+                Log.d("ArtistImageService", "Fallback artiste pour: $cleanArtistName")
+                return@withContext getArtistImageUrl(cleanArtistName)
+            }
             return@withContext null
 
         } catch (e: Exception) {
@@ -174,6 +177,7 @@ class ArtistImageService(private val context: Context) {
             if (parts.size != 2) return null
 
             val url = parts[0]
+            if (url.isBlank()) return null
             val timestamp = parts[1].toLongOrNull() ?: return null
 
             // Vérifier si le cache n'est pas expiré
