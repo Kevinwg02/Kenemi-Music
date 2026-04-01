@@ -24,8 +24,8 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/kmicon"
-        android:roundIcon="@mipmap/kmicon_round"
+        android:icon="@mipmap/kmiconwhite"
+        android:roundIcon="@mipmap/kmiconwhite_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.KM">
