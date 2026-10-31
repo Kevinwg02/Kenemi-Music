@@ -440,7 +440,7 @@ private fun SuccessState(
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
                                             .data(url2)
-                                            .memoryCacheKey("$url2#$imageVersion")
+                                            .memoryCacheKey(imageCacheKey(url2, imageVersion))
                                             .crossfade(true)
                                             .build(),
                                         contentDescription = artistNames.getOrNull(1),
@@ -481,7 +481,7 @@ private fun SuccessState(
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
                                             .data(url1)
-                                            .memoryCacheKey("$url1#$imageVersion")
+                                            .memoryCacheKey(imageCacheKey(url1, imageVersion))
                                             .crossfade(true)
                                             .build(),
                                         contentDescription = artistNames.getOrNull(0),
@@ -522,7 +522,7 @@ private fun SuccessState(
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
                                         .data(url)
-                                            .memoryCacheKey("$url#$imageVersion")
+                                            .memoryCacheKey(imageCacheKey(url, imageVersion))
                                         .crossfade(true)
                                         .build(),
                                     contentDescription = null,

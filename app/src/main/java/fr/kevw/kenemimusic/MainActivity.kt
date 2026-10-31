@@ -3590,7 +3590,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     if (albumCoverUrl != null) {
                         AsyncImage(
-                            model = ImageRequest.Builder(context).data(albumCoverUrl).memoryCacheKey("$albumCoverUrl#$imageVersion")
+                            model = ImageRequest.Builder(context).data(albumCoverUrl).memoryCacheKey(imageCacheKey(albumCoverUrl, imageVersion))
                                 .crossfade(true)
                                 .build(),
                             contentDescription = "Pochette de ${album.name}",
@@ -3809,7 +3809,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     if (imageUrl != null) {
                         AsyncImage(
-                            model = ImageRequest.Builder(context).data(imageUrl).memoryCacheKey("$imageUrl#$imageVersion").crossfade(true)
+                            model = ImageRequest.Builder(context).data(imageUrl).memoryCacheKey(imageCacheKey(imageUrl, imageVersion)).crossfade(true)
                                 .build(),
                             contentDescription = "Photo de ${artist.name}",
                             modifier = Modifier.fillMaxSize(),
@@ -3893,7 +3893,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     if (imageUrl != null) {
                         AsyncImage(
-                            model = ImageRequest.Builder(context).data(imageUrl).memoryCacheKey("$imageUrl#$imageVersion").crossfade(true)
+                            model = ImageRequest.Builder(context).data(imageUrl).memoryCacheKey(imageCacheKey(imageUrl, imageVersion)).crossfade(true)
                                 .build(),
                             contentDescription = "Photo de ${artist.name}",
                             modifier = Modifier.fillMaxSize(),
@@ -4018,7 +4018,7 @@ class MainActivity : ComponentActivity() {
                         if (albumCoverUrl != null) {
                             AsyncImage(
                                 model = ImageRequest.Builder(context)
-                                    .data(albumCoverUrl).memoryCacheKey("$albumCoverUrl#$imageVersion")
+                                    .data(albumCoverUrl).memoryCacheKey(imageCacheKey(albumCoverUrl, imageVersion))
                                     .crossfade(true)
                                     .build(),
                                 contentDescription = null,
@@ -4077,7 +4077,7 @@ class MainActivity : ComponentActivity() {
                                 if (albumCoverUrl != null) {
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
-                                            .data(albumCoverUrl).memoryCacheKey("$albumCoverUrl#$imageVersion")
+                                            .data(albumCoverUrl).memoryCacheKey(imageCacheKey(albumCoverUrl, imageVersion))
                                             .crossfade(true)
                                             .build(),
                                         contentDescription = "Pochette de ${album.name}",
@@ -4480,7 +4480,7 @@ class MainActivity : ComponentActivity() {
                             AsyncImage(
                                 model = ImageRequest.Builder(context)
                                     .data(artistImageUrl)
-                                    .memoryCacheKey("$artistImageUrl#$imageVersion")
+                                    .memoryCacheKey(imageCacheKey(artistImageUrl, imageVersion))
                                     .crossfade(true)
                                     .build(),
                                 contentDescription = "Photo de ${artist.name}",

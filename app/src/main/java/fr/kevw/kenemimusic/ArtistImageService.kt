@@ -32,6 +32,16 @@ data class ArtistSearchResult(
     val errors: List<String>
 )
 
+/**
+ * Clé de cache mémoire pour Coil : elle change quand le fichier local est remplacé
+ * (même chemin, nouveau contenu), sinon l'ancienne image resterait affichée.
+ */
+fun imageCacheKey(url: String?, version: Int = 0): String {
+    val stamp = url?.takeIf { it.startsWith("file://") }
+        ?.let { java.io.File(it.removePrefix("file://")).lastModified() } ?: 0L
+    return "$url#$stamp#$version"
+}
+
 /** Une pochette d'album proposée par l'une des sources (Deezer, iTunes). */
 data class AlbumCandidate(
     val id: String,
@@ -98,7 +108,8 @@ class ArtistImageService(private val context: Context) {
                 return@withContext null
             }
 
-            downloadAndCacheImage(cacheKey, best.fullUrl)?.let { "file://${it.absolutePath}" }
+            downloadAndCacheImage(cacheKey, best.fullUrl, overwrite = false)
+                ?.let { "file://${it.absolutePath}" }
         } catch (e: Exception) {
             Log.e(TAG, "Erreur image artiste $artistName", e)
             null
@@ -303,7 +314,7 @@ class ArtistImageService(private val context: Context) {
                     val auto = autoFindAlbum(cleanAlbum, cleanArtist)
                     val best = auto.candidate
                     if (best != null) {
-                        downloadAndCacheImage(cacheKey, best.fullUrl)?.let {
+                        downloadAndCacheImage(cacheKey, best.fullUrl, overwrite = false)?.let {
                             return@withContext "file://${it.absolutePath}"
                         }
                     } else {
@@ -568,7 +579,7 @@ class ArtistImageService(private val context: Context) {
 
     private fun artistCacheKey(cleanName: String) = safeKey(CACHE_PREFIX_ARTIST + cleanName.lowercase())
 
-    private fun downloadAndCacheImage(key: String, urlString: String): File? {
+    private fun downloadAndCacheImage(key: String, urlString: String, overwrite: Boolean = true): File? {
         return try {
             val conn = (URL(urlString).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000
@@ -585,11 +596,21 @@ class ArtistImageService(private val context: Context) {
                 urlString.contains(".gif", ignoreCase = true) -> "gif"
                 else -> "jpg"
             }
-            val partFile = File(cacheDir, "$key.$extension.part")
+            val partFile = File(cacheDir, "$key.$extension.${System.nanoTime()}.part")
             conn.inputStream.use { input ->
                 FileOutputStream(partFile).use { out -> input.copyTo(out) }
             }
             conn.disconnect()
+
+            // Détection automatique : si une image existe déjà (choix de l'utilisateur
+            // enregistré entre-temps), on la garde.
+            if (!overwrite) {
+                val existing = getCachedImageFile(key)
+                if (existing != null) {
+                    partFile.delete()
+                    return existing
+                }
+            }
 
             // Téléchargement réussi : on remplace l'ancienne image
             deleteCachedFiles(key)
