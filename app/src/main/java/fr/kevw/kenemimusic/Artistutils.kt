@@ -2,64 +2,57 @@ package fr.kevw.kenemimusic
 
 /**
  * Parse le champ artist d'une chanson pour extraire tous les artistes individuels.
- * Gère les formats courants : "Artist1 feat. Artist2", "Artist1 & Artist2", etc.
+ * Gère : "A feat. B", "A & B", "A / B", "A/B", "A; B", "A, B & C", "A (feat. B)", "A x B"...
  */
 object ArtistUtils {
 
-    // Séparateurs courants entre artistes
-    private val SEPARATORS = listOf(
-        " feat. ", " feat ", " ft. ", " ft ", " featuring ",
-        " & ", " x ", " X ", " vs. ", " vs ", " with ",
-        ", ", " / ", "/"
+    /**
+     * Noms d'artistes qui contiennent un séparateur mais sont UN SEUL artiste.
+     * Ajoute ici ceux qui sont mal découpés dans ta bibliothèque.
+     */
+    private val PROTECTED_NAMES = listOf(
+        "AC/DC", "Tyler, The Creator", "Earth, Wind & Fire", "Simon & Garfunkel",
+        "Hall & Oates", "Years & Years", "Florence + The Machine", "Brooks & Dunn",
+        "Crosby, Stills, Nash & Young", "Mumford & Sons"
     )
 
-    /**
-     * Retourne la liste de tous les artistes présents dans le champ artist.
-     * Ex: "Drake feat. Lil Baby" → ["Drake", "Lil Baby"]
-     * Ex: "Jay-Z & Kanye West" → ["Jay-Z", "Kanye West"]
-     */
+    // Mots-séparateurs entourés d'espaces  |  virgule + espace  |  "/" ou ";" avec ou sans espaces
+    private val SPLIT_REGEX = Regex(
+        "(?i)\\s+(?:feat\\.?|ft\\.?|featuring|vs\\.?|with|x|&)\\s+|\\s*,\\s+|\\s*[;/]\\s*"
+    )
+    private val FEAT_IN_BRACKETS = Regex("(?i)[(\\[]\\s*(?:feat\\.?|ft\\.?|featuring|with)\\s+")
+
     fun parseArtists(artistField: String): List<String> {
         if (artistField.isBlank() || artistField == "Artiste inconnu") {
             return listOf(artistField)
         }
 
-        var remaining = artistField.trim()
-        val artists = mutableListOf<String>()
+        var s = artistField.trim()
 
-        // Chercher le premier séparateur présent
-        for (sep in SEPARATORS) {
-            val idx = remaining.indexOf(sep, ignoreCase = true)
-            if (idx != -1) {
-                // Artiste principal (avant le séparateur)
-                val main = remaining.substring(0, idx).trim()
-                if (main.isNotBlank()) artists.add(main)
-
-                // Le reste peut contenir d'autres artistes
-                val rest = remaining.substring(idx + sep.length).trim()
-                // Retirer les parenthèses éventuelles autour de la feature
-                val clean = rest.removeSuffix(")").removePrefix("(").trim()
-                if (clean.isNotBlank()) artists.add(clean)
-
-                return artists.distinct()
-            }
+        // "A (feat. B)" -> "A feat. B"
+        if (FEAT_IN_BRACKETS.containsMatchIn(s)) {
+            s = FEAT_IN_BRACKETS.replace(s, " feat. ").trimEnd(')', ']').trim()
         }
 
-        // Aucun séparateur trouvé → un seul artiste
-        return listOf(artistField.trim())
+        // Protège les noms qui contiennent un séparateur
+        val found = PROTECTED_NAMES.filter { s.contains(it, ignoreCase = true) }
+        found.forEachIndexed { i, name -> s = s.replace(name, "@@${i}@@", ignoreCase = true) }
+
+        val parts = s.split(SPLIT_REGEX)
+            .map { part ->
+                var p = part.trim()
+                found.forEachIndexed { i, name -> p = p.replace("@@${i}@@", name) }
+                p
+            }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        return parts.ifEmpty { listOf(artistField.trim()) }
     }
 
-    /**
-     * Vérifie si un artiste donné est l'un des artistes d'une chanson.
-     */
-    fun songBelongsToArtist(song: Song, artistName: String): Boolean {
-        val songArtists = parseArtists(song.artist)
-        return songArtists.any { it.equals(artistName, ignoreCase = true) }
-    }
+    fun songBelongsToArtist(song: Song, artistName: String): Boolean =
+        parseArtists(song.artist).any { it.equals(artistName, ignoreCase = true) }
 
-    /**
-     * Retourne le nom "principal" (avant toute feature) pour l'affichage.
-     */
-    fun primaryArtist(artistField: String): String {
-        return parseArtists(artistField).firstOrNull() ?: artistField
-    }
+    fun primaryArtist(artistField: String): String =
+        parseArtists(artistField).firstOrNull() ?: artistField
 }

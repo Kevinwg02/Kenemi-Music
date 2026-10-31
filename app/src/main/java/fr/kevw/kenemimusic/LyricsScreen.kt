@@ -4,7 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -348,6 +350,7 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
 }
 
 // ===== SUCCESS STATE =====
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SuccessState(
     lyrics: String,
@@ -367,6 +370,8 @@ private fun SuccessState(
     // Image pour chaque artiste
     var artistImageUrls by remember { mutableStateOf<List<String?>>(listOf(null, null)) }
     var isLoadingImages by remember { mutableStateOf(true) }
+    var pickerArtist by remember { mutableStateOf<String?>(null) }
+    var imageVersion by remember { mutableStateOf(0) }
 
     LaunchedEffect(song.artist) {
         val urls = artistNames.map { name ->
@@ -374,6 +379,20 @@ private fun SuccessState(
         }.map { it.await() }
         artistImageUrls = urls
         isLoadingImages = false
+    }
+
+    pickerArtist?.let { name ->
+        ArtistPickerDialog(
+            artistName = name,
+            service = imageService,
+            onDismiss = { pickerArtist = null },
+            onPicked = {
+                scope.launch {
+                    artistImageUrls = artistNames.map { imageService.getArtistImageUrl(it) }
+                    imageVersion++
+                }
+            }
+        )
     }
 
     Column(
@@ -408,7 +427,8 @@ private fun SuccessState(
                             modifier = Modifier
                                 .size(60.dp)
                                 .align(Alignment.CenterEnd)
-                                .clip(CircleShape),
+                                .clip(CircleShape)
+                                .combinedClickable(onClick = {}, onLongClick = { pickerArtist = artistNames.getOrNull(1) }),
                             elevation = CardDefaults.cardElevation(1.dp)
                         ) {
                             Box(
@@ -420,6 +440,7 @@ private fun SuccessState(
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
                                             .data(url2)
+                                            .memoryCacheKey("$url2#$imageVersion")
                                             .crossfade(true)
                                             .build(),
                                         contentDescription = artistNames.getOrNull(1),
@@ -447,7 +468,8 @@ private fun SuccessState(
                             modifier = Modifier
                                 .size(64.dp)
                                 .align(Alignment.CenterStart)
-                                .clip(CircleShape),
+                                .clip(CircleShape)
+                                .combinedClickable(onClick = {}, onLongClick = { pickerArtist = artistNames.getOrNull(0) }),
                             elevation = CardDefaults.cardElevation(4.dp)
                         ) {
                             Box(
@@ -459,6 +481,7 @@ private fun SuccessState(
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
                                             .data(url1)
+                                            .memoryCacheKey("$url1#$imageVersion")
                                             .crossfade(true)
                                             .build(),
                                         contentDescription = artistNames.getOrNull(0),
@@ -486,7 +509,8 @@ private fun SuccessState(
                     Card(
                         modifier = Modifier
                             .size(72.dp)
-                            .clip(CircleShape),
+                            .clip(CircleShape)
+                            .combinedClickable(onClick = {}, onLongClick = { pickerArtist = artistNames.getOrNull(0) }),
                         elevation = CardDefaults.cardElevation(2.dp)
                     ) {
                         Box(
@@ -498,6 +522,7 @@ private fun SuccessState(
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
                                         .data(url)
+                                            .memoryCacheKey("$url#$imageVersion")
                                         .crossfade(true)
                                         .build(),
                                     contentDescription = null,

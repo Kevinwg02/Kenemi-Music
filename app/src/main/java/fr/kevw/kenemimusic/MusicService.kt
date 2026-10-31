@@ -1,5 +1,5 @@
 package fr.kevw.kenemimusic
-//commit
+
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,8 +11,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.graphics.BitmapFactory
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
@@ -21,7 +21,6 @@ import android.os.Build
 import android.os.Binder
 import android.os.IBinder
 import android.provider.MediaStore
-import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
@@ -34,35 +33,20 @@ import androidx.media.app.NotificationCompat.MediaStyle
 class MusicService : Service() {
     private val binder = MusicBinder()
     private lateinit var settingsManager: SettingsManager
-
     private fun updateWidget() {
         try {
             val progress = if (duration > 0) {
                 ((currentPosition.toFloat() / duration.toFloat()) * 100).toInt()
             } else 0
 
-            MusicWidgetProvider.updateWidget(
-                context = this,
-                song = currentSong,
-                isPlaying = isPlaying,
-                progress = progress,
-                albumArtUrl = currentAlbumArtUrl
-            )
-            MusicWidgetSmallProvider.updateWidget(
-                context = this,
-                song = currentSong,
-                isPlaying = isPlaying,
-                progress = progress,
-                albumArtUrl = currentAlbumArtUrl
-            )
+            MusicWidgetProvider.updateWidget(this, currentSong, isPlaying, progress)
+            Log.d("MusicService", "Widget updated: ${currentSong?.title}, playing=$isPlaying, progress=$progress")
         } catch (e: Exception) {
             Log.e("MusicService", "Error updating widget", e)
         }
     }
-
     private var mediaPlayer: MediaPlayer? = null
     var currentSong: Song? = null
-    var currentAlbumArtUrl: String? = null
     var isPlaying by mutableStateOf(false)
     var currentPosition by mutableStateOf(0L)
     var duration by mutableStateOf(0L)
@@ -80,17 +64,20 @@ class MusicService : Service() {
     private lateinit var audioManager: AudioManager
     private var audioFocusRequest: AudioFocusRequest? = null
 
+    // Pour éviter la reprise automatique
     private var wasPlayingBeforeFocusLoss = false
 
+    // ===== AJOUT : GESTION BLUETOOTH =====
     private var bluetoothReceiver: BroadcastReceiver? = null
     private var isBluetoothReceiverRegistered = false
 
+    // ===== AJOUT : GESTION DES ÉCOUTEURS FILAIRES =====
     private var headsetReceiver: BroadcastReceiver? = null
     private var isHeadsetReceiverRegistered = false
     private lateinit var statsManager: StatsManager
     private var songStartTime: Long = 0
 
-    companion object {
+companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "music_channel"
         const val ACTION_PLAY_PAUSE = "ACTION_PLAY_PAUSE"
@@ -108,9 +95,10 @@ class MusicService : Service() {
         return binder
     }
 
-    override fun onCreate() {
+override fun onCreate() {
         super.onCreate()
 
+        // ✅ INITIALISER les managers
         statsManager = StatsManager(this)
         settingsManager = SettingsManager(this)
 
@@ -121,26 +109,41 @@ class MusicService : Service() {
         setupHeadsetReceiver()
     }
 
+    //  CONFIGURATION DU RECEIVER BLUETOOTH =====
     private fun setupBluetoothReceiver() {
         bluetoothReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
                     BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
-                        Log.d("MusicService", "Bluetooth déconnecté - Pause de la musique")
-                        if (isPlaying) pause()
+                        // Déconnexion Bluetooth détectée
+                        android.util.Log.d("MusicService", "Bluetooth déconnecté - Pause de la musique")
+                        if (isPlaying) {
+                            pause()
+                        }
                     }
                     BluetoothAdapter.ACTION_STATE_CHANGED -> {
-                        val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                        val state = intent.getIntExtra(
+                            BluetoothAdapter.EXTRA_STATE,
+                            BluetoothAdapter.ERROR
+                        )
                         if (state == BluetoothAdapter.STATE_OFF || state == BluetoothAdapter.STATE_TURNING_OFF) {
-                            Log.d("MusicService", "Bluetooth désactivé - Pause de la musique")
-                            if (isPlaying) pause()
+                            // Bluetooth désactivé
+                            android.util.Log.d("MusicService", "Bluetooth désactivé - Pause de la musique")
+                            if (isPlaying) {
+                                pause()
+                            }
                         }
                     }
                     AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED -> {
-                        val state = intent.getIntExtra(AudioManager.EXTRA_SCO_AUDIO_STATE, AudioManager.SCO_AUDIO_STATE_ERROR)
+                        val state = intent.getIntExtra(
+                            AudioManager.EXTRA_SCO_AUDIO_STATE,
+                            AudioManager.SCO_AUDIO_STATE_ERROR
+                        )
                         if (state == AudioManager.SCO_AUDIO_STATE_DISCONNECTED) {
-                            Log.d("MusicService", "Audio Bluetooth déconnecté - Pause")
-                            if (isPlaying) pause()
+                            android.util.Log.d("MusicService", "Audio Bluetooth déconnecté - Pause")
+                            if (isPlaying) {
+                                pause()
+                            }
                         }
                     }
                 }
@@ -156,18 +159,22 @@ class MusicService : Service() {
         try {
             registerReceiver(bluetoothReceiver, filter)
             isBluetoothReceiverRegistered = true
-            Log.d("MusicService", "Bluetooth receiver enregistré")
+            android.util.Log.d("MusicService", "Bluetooth receiver enregistré")
         } catch (e: Exception) {
-            Log.e("MusicService", "Erreur lors de l'enregistrement du Bluetooth receiver", e)
+            android.util.Log.e("MusicService", "Erreur lors de l'enregistrement du Bluetooth receiver", e)
         }
     }
 
+    // ===== AJOUT : CONFIGURATION DU RECEIVER ÉCOUTEURS FILAIRES =====
     private fun setupHeadsetReceiver() {
         headsetReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
-                    Log.d("MusicService", "Écouteurs débranchés - Pause de la musique")
-                    if (isPlaying) pause()
+                    // Écouteurs débranchés ou autre perturbation audio
+                    android.util.Log.d("MusicService", "Écouteurs débranchés - Pause de la musique")
+                    if (isPlaying) {
+                        pause()
+                    }
                 }
             }
         }
@@ -177,9 +184,9 @@ class MusicService : Service() {
         try {
             registerReceiver(headsetReceiver, filter)
             isHeadsetReceiverRegistered = true
-            Log.d("MusicService", "Headset receiver enregistré")
+            android.util.Log.d("MusicService", "Headset receiver enregistré")
         } catch (e: Exception) {
-            Log.e("MusicService", "Erreur lors de l'enregistrement du Headset receiver", e)
+            android.util.Log.e("MusicService", "Erreur lors de l'enregistrement du Headset receiver", e)
         }
     }
 
@@ -191,12 +198,29 @@ class MusicService : Service() {
             )
 
             setCallback(object : MediaSessionCompat.Callback() {
-                override fun onPlay() { resume() }
-                override fun onPause() { pause() }
-                override fun onSkipToNext() { playNext() }
-                override fun onSkipToPrevious() { playPrevious() }
-                override fun onSeekTo(pos: Long) { seekTo(pos) }
-                override fun onStop() { stopPlayback() }
+                override fun onPlay() {
+                    resume()
+                }
+
+                override fun onPause() {
+                    pause()
+                }
+
+                override fun onSkipToNext() {
+                    playNext()
+                }
+
+                override fun onSkipToPrevious() {
+                    playPrevious()
+                }
+
+                override fun onSeekTo(pos: Long) {
+                    seekTo(pos)
+                }
+
+                override fun onStop() {
+                    stopPlayback()
+                }
             })
 
             isActive = true
@@ -259,7 +283,11 @@ class MusicService : Service() {
     }
 
     private fun updatePlaybackState() {
-        val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+        val state = if (isPlaying) {
+            PlaybackStateCompat.STATE_PLAYING
+        } else {
+            PlaybackStateCompat.STATE_PAUSED
+        }
 
         val playbackState = PlaybackStateCompat.Builder()
             .setState(state, currentPosition, 1.0f)
@@ -276,33 +304,19 @@ class MusicService : Service() {
         mediaSession.setPlaybackState(playbackState)
     }
 
-    // ✅ NOUVEAU : met à jour les métadonnées (titre, artiste, pochette) dans la MediaSession
-    private fun updateMediaSessionMetadata() {
-        val albumArt = try {
-            val uri = Uri.parse("content://media/external/audio/albumart/${currentSong?.albumId}")
-            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-        } catch (e: Exception) { null }
-
-        val metadata = MediaMetadataCompat.Builder()
-            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentSong?.title)
-            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentSong?.artist)
-            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, currentSong?.album)
-            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
-            .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, albumArt)
-            .build()
-
-        mediaSession.setMetadata(metadata)
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_PLAY_PAUSE -> { if (isPlaying) pause() else resume() }
+            ACTION_PLAY_PAUSE -> {
+                if (isPlaying) pause() else resume()
+            }
             ACTION_NEXT -> playNext()
             ACTION_PREVIOUS -> playPrevious()
             ACTION_STOP -> stopPlayback()
             ACTION_PLAY_SPECIFIC_SONG -> {
                 val songId = intent.getLongExtra("song_id", -1L)
-                if (songId != -1L) playSongFromId(songId)
+                if (songId != -1L) {
+                    playSongFromId(songId)
+                }
             }
         }
         return START_STICKY
@@ -323,12 +337,6 @@ class MusicService : Service() {
     }
 
     private fun buildNotification(): Notification {
-        // ✅ Charger la pochette pour l'affichage agrandi sur l'écran de verrouillage
-        val albumArt = try {
-            val uri = Uri.parse("content://media/external/audio/albumart/${currentSong?.albumId}")
-            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-        } catch (e: Exception) { null }
-
         val openAppIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
@@ -362,8 +370,7 @@ class MusicService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(currentSong?.title ?: "Aucune chanson")
             .setContentText(currentSong?.artist ?: "")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setLargeIcon(albumArt) // ✅ Pochette = lecteur agrandi sur l'écran de verrouillage
+            .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentIntent(openAppIntent)
             .addAction(android.R.drawable.ic_media_previous, "Précédent", previousIntent)
             .addAction(
@@ -373,11 +380,9 @@ class MusicService : Service() {
             )
             .addAction(android.R.drawable.ic_media_next, "Suivant", nextIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Fermer", stopIntent)
-            .setStyle(
-                MediaStyle()
-                    .setShowActionsInCompactView(0, 1, 2)
-                    .setMediaSession(mediaSession.sessionToken)
-            )
+            .setStyle(MediaStyle()
+                .setShowActionsInCompactView(0, 1, 2)
+                .setMediaSession(mediaSession.sessionToken))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOnlyAlertOnce(true)
             .setOngoing(isPlaying)
@@ -400,51 +405,52 @@ class MusicService : Service() {
     fun toggleShuffle() {
         isShuffleEnabled = !isShuffleEnabled
     }
-
+    // Méthode pour injecter StatsManager
     fun setStatsManager(manager: StatsManager) {
         this.statsManager = manager
-        Log.d("MusicService", "StatsManager configuré")
+        android.util.Log.d("MusicService", "StatsManager configuré")
     }
-
     fun setSettingsManager(manager: SettingsManager) {
         this.settingsManager = manager
-        Log.d("MusicService", "SettingsManager configuré")
+        android.util.Log.d("MusicService", "SettingsManager configuré")
     }
-
     private fun saveCurrentSongToSettings() {
         if (::settingsManager.isInitialized) {
             currentSong?.let { song ->
                 settingsManager.lastPlayedSongId = song.id
                 settingsManager.lastPlayedPosition = currentPosition
-                Log.d("MusicService", "Sauvegarde: ${song.title} à ${currentPosition}ms")
+                android.util.Log.d("MusicService", "Sauvegarde: ${song.title} à ${currentPosition}ms")
             }
         }
     }
-
+    // Save last played song when it changes
     fun saveLastPlayedSong(settingsManager: SettingsManager) {
         currentSong?.let { song ->
             settingsManager.lastPlayedSongId = song.id
             settingsManager.lastPlayedPosition = currentPosition
         }
     }
-
     fun playSong(song: Song) {
         Log.d("MusicService", "playSong called: ${song.title}")
 
-        if (!requestAudioFocus()) return
-
+        if (!requestAudioFocus()) {
+            return
+        }
         onStateChanged?.invoke()
         saveCurrentSongToSettings()
-
         try {
+            // ✅ ENREGISTRER la chanson précédente avant de changer
             currentSong?.let { previousSong ->
                 val playDuration = (System.currentTimeMillis() - songStartTime) / 1000
+                // Enregistrer seulement si la chanson a été écoutée au moins 30 secondes
                 if (playDuration >= 30) {
                     statsManager.recordSongPlay(previousSong, playDuration)
                 }
             }
 
+            // ✅ NOTER le temps de début de la nouvelle chanson
             songStartTime = System.currentTimeMillis()
+
             currentIndex = playlist.indexOfFirst { it.id == song.id }
 
             mediaPlayer?.release()
@@ -453,6 +459,7 @@ class MusicService : Service() {
                     handlePlaybackError(song)
                     true
                 }
+
                 setDataSource(this@MusicService, song.uri)
                 prepare()
                 setOnCompletionListener { handleSongCompletion() }
@@ -462,38 +469,39 @@ class MusicService : Service() {
             currentSong = song
             duration = mediaPlayer?.duration?.toLong() ?: 0L
             isPlaying = true
-            currentAlbumArtUrl = "content://media/external/audio/albumart/${song.albumId}"
 
             updatePlaybackState()
-            updateMediaSessionMetadata() // ✅ Met à jour la pochette dans la MediaSession
             startForeground(NOTIFICATION_ID, buildNotification())
             onStateChanged?.invoke()
 
         } catch (e: Exception) {
             e.printStackTrace()
             handlePlaybackError(song)
-        }
-
+}
         updateWidget()
     }
 
     private fun playSongFromId(songId: Long) {
         Log.d("MusicService", "playSongFromId called: songId=$songId")
-
+        
+        // S'assurer que le service est en premier plan
         if (!isPlaying && currentSong == null) {
             try {
                 startForeground(NOTIFICATION_ID, buildNotification())
+                Log.d("MusicService", "Started foreground service")
                 Log.d("MusicService", "Started foreground service")
             } catch (e: Exception) {
                 Log.e("MusicService", "Error starting foreground service", e)
             }
         }
-
+        
+        // Chercher la chanson dans la playlist actuelle
         val song = playlist.find { it.id == songId }
         if (song != null) {
             Log.d("MusicService", "Found song in current playlist: ${song.title}")
             playSong(song)
         } else {
+            // Si la chanson n'est pas dans la playlist, charger toutes les chansons
             Log.d("MusicService", "Song not in playlist, loading all songs")
             loadAllSongsAndPlay(songId)
         }
@@ -521,7 +529,13 @@ class MusicService : Service() {
                 val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
                 val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
 
-                contentResolver.query(collection, projection, selection, null, sortOrder)?.use { cursor ->
+                contentResolver.query(
+                    collection,
+                    projection,
+                    selection,
+                    null,
+                    sortOrder
+                )?.use { cursor ->
                     val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                     val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
                     val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
@@ -537,7 +551,10 @@ class MusicService : Service() {
                         val albumId = cursor.getLong(albumIdColumn)
                         val album = cursor.getString(albumColumn) ?: "Album inconnu"
 
-                        val uri = Uri.withAppendedPath(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id.toString())
+                        val uri = Uri.withAppendedPath(
+                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                            id.toString()
+                        )
 
                         try {
                             contentResolver.openInputStream(uri)?.close()
@@ -548,9 +565,10 @@ class MusicService : Service() {
                     }
                 }
 
+                // Mettre à jour la playlist et jouer la chanson demandée
                 playlist = allSongs
                 Log.d("MusicService", "Updated playlist with ${allSongs.size} songs")
-
+                
                 val targetSong = allSongs.find { it.id == songId }
                 if (targetSong != null) {
                     Log.d("MusicService", "Found target song: ${targetSong.title}")
@@ -565,7 +583,7 @@ class MusicService : Service() {
     }
 
     private fun handlePlaybackError(failedSong: Song) {
-        Log.e("MusicService", "Impossible de lire: ${failedSong.title}")
+        android.util.Log.e("MusicService", "Impossible de lire: ${failedSong.title}")
 
         if (hasNext) {
             playNext()
@@ -610,7 +628,8 @@ class MusicService : Service() {
         if (playlist.isEmpty()) return
 
         if (isShuffleEnabled) {
-            playSong(playlist[playlist.indices.random()])
+            val randomIndex = playlist.indices.random()
+            playSong(playlist[randomIndex])
             return
         }
 
@@ -626,7 +645,8 @@ class MusicService : Service() {
         if (playlist.isEmpty()) return
 
         if (isShuffleEnabled) {
-            playSong(playlist[playlist.indices.random()])
+            val randomIndex = playlist.indices.random()
+            playSong(playlist[randomIndex])
             return
         }
 
@@ -658,16 +678,19 @@ class MusicService : Service() {
         currentSong?.let { song ->
             val playDuration = (System.currentTimeMillis() - songStartTime) / 1000
             if (playDuration >= 30) {
-                statsManager.recordSongPlay(song, playDuration)
-                Log.d("MusicService", "Terminé: ${song.title} - ${playDuration}s")
+                statsManager?.recordSongPlay(song, playDuration)
+                android.util.Log.d("MusicService", "Terminé: ${song.title} - ${playDuration}s")
             }
         }
 
         when (repeatMode) {
             RepeatMode.ONE -> currentSong?.let { playSong(it) }
             RepeatMode.ALL -> {
-                if (hasNext) playNext()
-                else if (playlist.isNotEmpty()) playSong(playlist[0])
+                if (hasNext) {
+                    playNext()
+                } else if (playlist.isNotEmpty()) {
+                    playSong(playlist[0])
+                }
             }
             RepeatMode.OFF -> {
                 if (hasNext) playNext()
@@ -693,6 +716,7 @@ class MusicService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
+        // ✅ ENREGISTRER la chanson en cours avant de fermer
         currentSong?.let { song ->
             val playDuration = (System.currentTimeMillis() - songStartTime) / 1000
             if (playDuration >= 30) {
@@ -706,7 +730,7 @@ class MusicService : Service() {
                 isBluetoothReceiverRegistered = false
             }
         } catch (e: Exception) {
-            Log.e("MusicService", "Erreur Bluetooth receiver", e)
+            android.util.Log.e("MusicService", "Erreur Bluetooth receiver", e)
         }
 
         try {
@@ -715,7 +739,7 @@ class MusicService : Service() {
                 isHeadsetReceiverRegistered = false
             }
         } catch (e: Exception) {
-            Log.e("MusicService", "Erreur Headset receiver", e)
+            android.util.Log.e("MusicService", "Erreur Headset receiver", e)
         }
 
         mediaSession.release()

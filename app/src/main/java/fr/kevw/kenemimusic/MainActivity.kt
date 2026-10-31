@@ -25,6 +25,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -149,6 +150,9 @@ import androidx.compose.foundation.rememberScrollState
 import android.content.res.Configuration
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.layout.fillMaxHeight
+
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 // ===== PERSONNALISATION DES COULEURS =====
 @Composable
 fun customColorScheme() = darkColorScheme(
@@ -528,7 +532,7 @@ class MainActivity : ComponentActivity() {
 
         Log.d("MainActivity", "Has permission: $hasPermission")
 
-        if (hasPermission) {
+        if (hasPermission && settingsManager.autoScanOnStart) {
             loadAppDataAsync()
         }
     }
@@ -805,7 +809,12 @@ class MainActivity : ComponentActivity() {
                     val album = cursor.getString(albumColumn) ?: "Album inconnu"
                     val dataPath = cursor.getString(dataColumn) ?: continue
 
-                    if (duration <= 0 || !dataPath.contains("/Music/", ignoreCase = true)) {
+                    if (duration <= 0) {
+                        continue
+                    }
+
+                    val folderName = settingsManager.musicFolderName
+                    if (!dataPath.contains("/$folderName/", ignoreCase = true)) {
                         continue
                     }
 
@@ -815,7 +824,7 @@ class MainActivity : ComponentActivity() {
                     val file = File(dataPath)
                     val folderFile = file.parentFile ?: continue
 
-                    if (!folderFile.absolutePath.contains("/Music/", ignoreCase = true)) {
+                    if (!folderFile.absolutePath.contains("/$folderName/", ignoreCase = true)) {
                         continue
                     }
 
@@ -2750,7 +2759,39 @@ class MainActivity : ComponentActivity() {
         val progress = if (duration > 0) (currentPosition.toFloat() / duration.toFloat()) * 100f else 0f
 
         Scaffold(contentWindowInsets = WindowInsets(0)) { padding ->
-            Box(modifier = Modifier.fillMaxSize()) {
+            // ✅ APRÈS
+            var swipeOffsetX by remember { mutableStateOf(0f) }
+            val swipeThreshold = 80f // pixels minimum pour déclencher le changement
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                when {
+                                    swipeOffsetX < -swipeThreshold -> {
+                                        // Swipe gauche → chanson suivante
+                                        if (musicPlayer.hasNext || repeatMode == RepeatMode.ALL) {
+                                            musicPlayer.playNext()
+                                        }
+                                    }
+                                    swipeOffsetX > swipeThreshold -> {
+                                        // Swipe droite → chanson précédente
+                                        if (musicPlayer.hasPrevious || repeatMode == RepeatMode.ALL) {
+                                            musicPlayer.playPrevious()
+                                        }
+                                    }
+                                }
+                                swipeOffsetX = 0f
+                            },
+                            onDragCancel = { swipeOffsetX = 0f },
+                            onHorizontalDrag = { _, dragAmount ->
+                                swipeOffsetX += dragAmount
+                            }
+                        )
+                    }
+            ) {
                 // Background flouté
                 if (albumCoverUrl != null) {
                     AsyncImage(
@@ -3498,12 +3539,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
     fun AlbumItem(
         album: Album, onClick: () -> Unit, imageService: ArtistImageService
     ) {
         var albumCoverUrl by remember { mutableStateOf<String?>(null) }
         var isLoading by remember { mutableStateOf(true) }
+        var showPicker by remember { mutableStateOf(false) }
+        var imageVersion by remember { mutableStateOf(0) }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
 
@@ -3514,10 +3558,24 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        if (showPicker) {
+            AlbumPickerDialog(
+                albumName = album.name,
+                artistName = album.artist,
+                service = imageService,
+                onDismiss = { showPicker = false },
+                onPicked = { url ->
+                    albumCoverUrl = url
+                    imageVersion++
+                    isLoading = false
+                }
+            )
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .combinedClickable(onClick = onClick, onLongClick = { showPicker = true })
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -3532,7 +3590,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     if (albumCoverUrl != null) {
                         AsyncImage(
-                            model = ImageRequest.Builder(context).data(albumCoverUrl)
+                            model = ImageRequest.Builder(context).data(albumCoverUrl).memoryCacheKey("$albumCoverUrl#$imageVersion")
                                 .crossfade(true)
                                 .build(),
                             contentDescription = "Pochette de ${album.name}",
@@ -3702,12 +3760,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
     fun ArtistGridItem(
         artist: Artist, onClick: () -> Unit, imageService: ArtistImageService
     ) {
         var imageUrl by remember { mutableStateOf<String?>(null) }
         var isLoading by remember { mutableStateOf(true) }
+        var showPicker by remember { mutableStateOf(false) }
+        var imageVersion by remember { mutableStateOf(0) }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
 
@@ -3718,11 +3779,24 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        if (showPicker) {
+            ArtistPickerDialog(
+                artistName = artist.name,
+                service = imageService,
+                onDismiss = { showPicker = false },
+                onPicked = { url ->
+                    imageUrl = url
+                    imageVersion++
+                    isLoading = false
+                }
+            )
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .combinedClickable(onClick = onClick, onLongClick = { showPicker = true })
         ) {
             Card(
                 modifier = Modifier
@@ -3735,7 +3809,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     if (imageUrl != null) {
                         AsyncImage(
-                            model = ImageRequest.Builder(context).data(imageUrl).crossfade(true)
+                            model = ImageRequest.Builder(context).data(imageUrl).memoryCacheKey("$imageUrl#$imageVersion").crossfade(true)
                                 .build(),
                             contentDescription = "Photo de ${artist.name}",
                             modifier = Modifier.fillMaxSize(),
@@ -3769,12 +3843,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
     fun ArtistItem(
         artist: Artist, onClick: () -> Unit, imageService: ArtistImageService
     ) {
         var imageUrl by remember { mutableStateOf<String?>(null) }
         var isLoading by remember { mutableStateOf(true) }
+        var showPicker by remember { mutableStateOf(false) }
+        var imageVersion by remember { mutableStateOf(0) }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
 
@@ -3785,10 +3862,23 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        if (showPicker) {
+            ArtistPickerDialog(
+                artistName = artist.name,
+                service = imageService,
+                onDismiss = { showPicker = false },
+                onPicked = { url ->
+                    imageUrl = url
+                    imageVersion++
+                    isLoading = false
+                }
+            )
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .combinedClickable(onClick = onClick, onLongClick = { showPicker = true })
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -3803,7 +3893,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     if (imageUrl != null) {
                         AsyncImage(
-                            model = ImageRequest.Builder(context).data(imageUrl).crossfade(true)
+                            model = ImageRequest.Builder(context).data(imageUrl).memoryCacheKey("$imageUrl#$imageVersion").crossfade(true)
                                 .build(),
                             contentDescription = "Photo de ${artist.name}",
                             modifier = Modifier.fillMaxSize(),
@@ -3862,6 +3952,8 @@ class MainActivity : ComponentActivity() {
         val isPlaying = musicPlayer.isPlaying
         var albumCoverUrl by remember { mutableStateOf<String?>(null) }
         var isLoading by remember { mutableStateOf(true) }
+        var showPicker by remember { mutableStateOf(false) }
+        var imageVersion by remember { mutableStateOf(0) }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
         val listState = rememberLazyListState()
@@ -3874,6 +3966,20 @@ class MainActivity : ComponentActivity() {
                 albumCoverUrl = imageService.getAlbumCoverUrl(album.name, album.artist)
                 isLoading = false
             }
+        }
+
+        if (showPicker) {
+            AlbumPickerDialog(
+                albumName = album.name,
+                artistName = album.artist,
+                service = imageService,
+                onDismiss = { showPicker = false },
+                onPicked = { url ->
+                    albumCoverUrl = url
+                    imageVersion++
+                    isLoading = false
+                }
+            )
         }
 
         // Auto-scroll to current song
@@ -3912,7 +4018,7 @@ class MainActivity : ComponentActivity() {
                         if (albumCoverUrl != null) {
                             AsyncImage(
                                 model = ImageRequest.Builder(context)
-                                    .data(albumCoverUrl)
+                                    .data(albumCoverUrl).memoryCacheKey("$albumCoverUrl#$imageVersion")
                                     .crossfade(true)
                                     .build(),
                                 contentDescription = null,
@@ -3971,7 +4077,7 @@ class MainActivity : ComponentActivity() {
                                 if (albumCoverUrl != null) {
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
-                                            .data(albumCoverUrl)
+                                            .data(albumCoverUrl).memoryCacheKey("$albumCoverUrl#$imageVersion")
                                             .crossfade(true)
                                             .build(),
                                         contentDescription = "Pochette de ${album.name}",
@@ -4198,6 +4304,30 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+
+                // Bouton « changer la pochette » (choix parmi les meilleurs candidats)
+                IconButton(
+                    onClick = { showPicker = true },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 4.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isHeaderVisible)
+                            Color.Black.copy(alpha = 0.35f)
+                        else
+                            Color.Transparent
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Changer la pochette",
+                            tint = if (isHeaderVisible) Color.White
+                            else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(6.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -4290,6 +4420,8 @@ class MainActivity : ComponentActivity() {
         val isPlaying = musicPlayer.isPlaying
         var artistImageUrl by remember { mutableStateOf<String?>(null) }
         var isLoading by remember { mutableStateOf(true) }
+        var showPicker by remember { mutableStateOf(false) }
+        var imageVersion by remember { mutableStateOf(0) }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
         val listState = rememberLazyListState()
@@ -4303,6 +4435,19 @@ class MainActivity : ComponentActivity() {
                 artistImageUrl = imageService.getArtistImageUrl(artist.name)
                 isLoading = false
             }
+        }
+
+        if (showPicker) {
+            ArtistPickerDialog(
+                artistName = artist.name,
+                service = imageService,
+                onDismiss = { showPicker = false },
+                onPicked = { url ->
+                    artistImageUrl = url
+                    imageVersion++
+                    isLoading = false
+                }
+            )
         }
 
         // Auto-scroll to current song
@@ -4335,6 +4480,7 @@ class MainActivity : ComponentActivity() {
                             AsyncImage(
                                 model = ImageRequest.Builder(context)
                                     .data(artistImageUrl)
+                                    .memoryCacheKey("$artistImageUrl#$imageVersion")
                                     .crossfade(true)
                                     .build(),
                                 contentDescription = "Photo de ${artist.name}",
@@ -4643,6 +4789,30 @@ class MainActivity : ComponentActivity() {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Retour",
+                            tint = if (isHeaderVisible) Color.White
+                            else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(6.dp)
+                        )
+                    }
+                }
+
+                // Bouton « changer l'image » (choix parmi les meilleurs candidats)
+                IconButton(
+                    onClick = { showPicker = true },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 4.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isHeaderVisible)
+                            Color.Black.copy(alpha = 0.35f)
+                        else
+                            Color.Transparent
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Changer l'image de l'artiste",
                             tint = if (isHeaderVisible) Color.White
                             else MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(6.dp)
